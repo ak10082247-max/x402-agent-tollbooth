@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+google-antigravity
+pydantic
+apscheduler
+web3
