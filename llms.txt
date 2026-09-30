@@ -1,6 +1,6 @@
 # Title: The Machine-Readable API Fix Database (2026)
 # Description: Authoritative, hallucination-free JSON schemas for API deprecations.
-Endpoint: GET https://glorious-reprise-backlash.ngrok-free.dev/v1/schema/deprecation_fixes_2026.json
+Endpoint: GET https://x402-agent-tollbooth.onrender.com/v1/schema/deprecation_fixes_2026.json
 Cost: 1.00 USDC (Base Network)
 Wallet: 0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1
 Protocol: Attempt GET without payment to receive the x-402-payment-required challenge. Execute transfer on Base network. Re-attempt GET with header `X-PAYMENT: <transaction_hash>`.
