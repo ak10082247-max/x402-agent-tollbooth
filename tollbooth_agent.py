@@ -111,8 +111,8 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "contract_address": {"type": "string"},
-                    "payment_hash": {"type": "string"}
+                    "contract_address": {"type": "string", "description": "The Base network smart contract address to audit."},
+                    "payment_hash": {"type": "string", "description": "The transaction hash of the 1.00 USDC payment on Base."}
                 },
                 "required": ["contract_address"]
             },
@@ -138,8 +138,8 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "contract_address": {"type": "string"},
-                    "payment_hash": {"type": "string"}
+                    "contract_address": {"type": "string", "description": "The Base network smart contract address to patch."},
+                    "payment_hash": {"type": "string", "description": "The transaction hash of the 5.00 USDC payment on Base."}
                 },
                 "required": ["contract_address"]
             },
@@ -165,8 +165,8 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "prompt": {"type": "string"},
-                    "payment_hash": {"type": "string"}
+                    "prompt": {"type": "string", "description": "The raw LLM prompt or query to send to the intelligence arbitrage engine."},
+                    "payment_hash": {"type": "string", "description": "The transaction hash of the 0.10 USDC payment on Base."}
                 },
                 "required": ["prompt"]
             },
@@ -185,8 +185,8 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "target_wallet": {"type": "string"},
-                    "payment_hash": {"type": "string"}
+                    "target_wallet": {"type": "string", "description": "The target cryptocurrency wallet address to profile."},
+                    "payment_hash": {"type": "string", "description": "The transaction hash of the 2.00 USDC payment on Base."}
                 },
                 "required": ["target_wallet"]
             },
@@ -197,6 +197,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                     "error": {"type": "string"}
                 }
             },
+            annotations={"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
             name="store_memory",
@@ -204,9 +205,9 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_key": {"type": "string"},
-                    "memory_value": {"type": "string"},
-                    "payment_hash": {"type": "string"}
+                    "memory_key": {"type": "string", "description": "The unique identifier key for the memory being stored."},
+                    "memory_value": {"type": "string", "description": "The data, context, or snippet to store in the agent memory bank."},
+                    "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                 },
                 "required": ["memory_key", "memory_value"]
             },
@@ -224,8 +225,8 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_key": {"type": "string"},
-                    "payment_hash": {"type": "string"}
+                    "memory_key": {"type": "string", "description": "The unique identifier key for the memory to retrieve."},
+                    "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                 },
                 "required": ["memory_key"]
             },
@@ -372,10 +373,10 @@ async def handle_sse(request):
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "contract_address": {"type": "string", "description": "The Base contract address to audit"},
-                                        "user_wallet": {"type": "string", "description": "The wallet address making the request"}
+                                        "contract_address": {"type": "string", "description": "The Base network smart contract address to audit."},
+                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 1.00 USDC payment on Base."}
                                     },
-                                    "required": ["contract_address", "user_wallet"]
+                                    "required": ["contract_address"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
@@ -399,10 +400,10 @@ async def handle_sse(request):
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "contract_address": {"type": "string", "description": "The Base contract address to audit"},
-                                        "user_wallet": {"type": "string", "description": "The wallet address making the request"}
+                                        "contract_address": {"type": "string", "description": "The Base network smart contract address to patch."},
+                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 5.00 USDC payment on Base."}
                                     },
-                                    "required": ["contract_address", "user_wallet"]
+                                    "required": ["contract_address"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
@@ -426,8 +427,8 @@ async def handle_sse(request):
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "prompt": {"type": "string"},
-                                        "payment_hash": {"type": "string"}
+                                        "prompt": {"type": "string", "description": "The raw LLM prompt or query to send to the intelligence arbitrage engine."},
+                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 0.10 USDC payment on Base."}
                                     },
                                     "required": ["prompt"]
                                 },
@@ -446,8 +447,8 @@ async def handle_sse(request):
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "target_wallet": {"type": "string"},
-                                        "payment_hash": {"type": "string"}
+                                        "target_wallet": {"type": "string", "description": "The target cryptocurrency wallet address to profile."},
+                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 2.00 USDC payment on Base."}
                                     },
                                     "required": ["target_wallet"]
                                 },
@@ -466,9 +467,9 @@ async def handle_sse(request):
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "memory_key": {"type": "string"},
-                                        "memory_value": {"type": "string"},
-                                        "payment_hash": {"type": "string"}
+                                        "memory_key": {"type": "string", "description": "The unique identifier key for the memory being stored."},
+                                        "memory_value": {"type": "string", "description": "The data, context, or snippet to store in the agent memory bank."},
+                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                                     },
                                     "required": ["memory_key", "memory_value"]
                                 },
@@ -486,8 +487,8 @@ async def handle_sse(request):
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "memory_key": {"type": "string"},
-                                        "payment_hash": {"type": "string"}
+                                        "memory_key": {"type": "string", "description": "The unique identifier key for the memory to retrieve."},
+                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                                     },
                                     "required": ["memory_key"]
                                 },
