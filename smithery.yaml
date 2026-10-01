@@ -1,0 +1,11 @@
+startCommand:
+  type: stdio
+  commandFunction:
+    command: uvicorn
+    args:
+      - tollbooth_agent:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8000'
+configSchema: {}
