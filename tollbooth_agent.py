@@ -125,7 +125,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                 }
             },
             annotations={
-                "title": "Live Contract Auditor",
+                "title": "Audit Contract",
                 "readOnlyHint": True,
                 "destructiveHint": False,
                 "idempotentHint": True,
@@ -152,7 +152,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                 }
             },
             annotations={
-                "title": "Auto Contract Patcher",
+                "title": "Patch Contract",
                 "readOnlyHint": True,
                 "destructiveHint": False,
                 "idempotentHint": True,
@@ -177,7 +177,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                     "error": {"type": "string"}
                 }
             },
-            annotations={"title": "Rent Intelligence", "readOnlyHint": True, "openWorldHint": True}
+            annotations={"title": "Query LLM", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
             name="profile-wallet",
@@ -197,7 +197,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                     "error": {"type": "string"}
                 }
             },
-            annotations={"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
+            annotations={"title": "Profile Wallet", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
             name="store-memory",
@@ -342,7 +342,7 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     else:
         return [types.TextContent(type="text", text=json.dumps({"error": "Invalid or missing payment transfer"}))]
 
-server = Server("x402-auditor", on_list_tools=list_tools_handler, on_call_tool=call_tool_handler)
+server = Server("x402-agent-tollbooth", on_list_tools=list_tools_handler, on_call_tool=call_tool_handler)
 sse = SseServerTransport("/messages/")
 
 async def handle_sse(request):
@@ -358,7 +358,7 @@ async def handle_sse(request):
                     "result": {
                         "protocolVersion": "2024-11-05",
                         "capabilities": {},
-                        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"}
+                        "serverInfo": {"name": "x402-agent-tollbooth", "version": "1.0.0"}
                     }
                 })
             elif method == "tools/list":
@@ -387,7 +387,7 @@ async def handle_sse(request):
                                     }
                                 },
                                 "annotations": {
-                                    "title": "Live Contract Auditor",
+                                    "title": "Audit Contract",
                                     "readOnlyHint": True,
                                     "destructiveHint": False,
                                     "idempotentHint": True,
@@ -414,7 +414,7 @@ async def handle_sse(request):
                                     }
                                 },
                                 "annotations": {
-                                    "title": "Auto Contract Patcher",
+                                    "title": "Patch Contract",
                                     "readOnlyHint": True,
                                     "destructiveHint": False,
                                     "idempotentHint": True,
@@ -439,7 +439,7 @@ async def handle_sse(request):
                                         "error": {"type": "string"}
                                     }
                                 },
-                                "annotations": {"title": "Rent Intelligence", "readOnlyHint": True, "openWorldHint": True}
+                                "annotations": {"title": "Query LLM", "readOnlyHint": True, "openWorldHint": True}
                             },
                             {
                                 "name": "profile-wallet",
@@ -459,7 +459,7 @@ async def handle_sse(request):
                                         "error": {"type": "string"}
                                     }
                                 },
-                                "annotations": {"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
+                                "annotations": {"title": "Profile Wallet", "readOnlyHint": True, "openWorldHint": True}
                             },
                             {
                                 "name": "store-memory",
@@ -526,7 +526,7 @@ async def server_card_handler(request):
     if request.method == "POST":
         return JSONResponse({"error": "Standard HTTP POST not supported. Please use SSE or fetch server-card.json"}, status_code=400)
     return JSONResponse({
-        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"},
+        "serverInfo": {"name": "x402-agent-tollbooth", "version": "1.0.0"},
         "tools": [{"name": "audit-contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
     })
 
