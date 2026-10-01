@@ -179,7 +179,7 @@ sse = SseServerTransport("/messages/")
 
 async def handle_sse(request):
     if request.method == "POST":
-        return JSONResponse({"serverInfo": {"name": "x402-auditor", "version": "1.0.0"}, "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]}, status_code=200)
+        return JSONResponse({"error": "SSE endpoint requires GET"}, status_code=400)
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())
 
@@ -187,7 +187,12 @@ async def handle_messages(request):
     await sse.handle_post_message(request.scope, request.receive, request._send)
 
 async def server_card_handler(request):
-    return JSONResponse({"serverInfo": {"name": "x402-auditor", "version": "1.0.0"}, "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]})
+    if request.method == "POST":
+        return JSONResponse({"error": "Standard HTTP POST not supported. Please use SSE or fetch server-card.json"}, status_code=400)
+    return JSONResponse({
+        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"},
+        "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
+    })
 
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
