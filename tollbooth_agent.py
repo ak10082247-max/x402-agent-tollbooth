@@ -16,7 +16,7 @@ from starlette.routing import Route
 from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+USDC_contractAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
 EXPECTED_AMOUNT = 1000000  # 1.00 USDC, 6 decimals
 TRANSFER_EVENT_SIGNATURE = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -62,7 +62,7 @@ def verify_payment(tx_hash: str, expected_amount: int):
             conn.close()
             return False
             
-        if receipt["to"].lower() != USDC_CONTRACT_ADDRESS.lower():
+        if receipt["to"].lower() != USDC_contractAddress.lower():
             conn.close()
             return False
             
@@ -106,15 +106,15 @@ async def fetch_contract_code(address: str):
 async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
     return [
         types.Tool(
-            name="audit_contract",
+            name="audit-contract",
             description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "contract_address": {"type": "string", "description": "The Base network smart contract address to audit."},
-                    "payment_hash": {"type": "string", "description": "The transaction hash of the 1.00 USDC payment on Base."}
+                    "contractAddress": {"type": "string", "description": "The Base network smart contract address to audit."},
+                    "paymentHash": {"type": "string", "description": "The transaction hash of the 1.00 USDC payment on Base."}
                 },
-                "required": ["contract_address"]
+                "required": ["contractAddress"]
             },
             output_schema={
                 "type": "object",
@@ -133,20 +133,20 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="patch_contract",
+            name="patch-contract",
             description="Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code. Requires 5.00 USDC payment via x402 protocol.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "contract_address": {"type": "string", "description": "The Base network smart contract address to patch."},
-                    "payment_hash": {"type": "string", "description": "The transaction hash of the 5.00 USDC payment on Base."}
+                    "contractAddress": {"type": "string", "description": "The Base network smart contract address to patch."},
+                    "paymentHash": {"type": "string", "description": "The transaction hash of the 5.00 USDC payment on Base."}
                 },
-                "required": ["contract_address"]
+                "required": ["contractAddress"]
             },
             output_schema={
                 "type": "object",
                 "properties": {
-                    "patched_code": {"type": "string"},
+                    "patchedCode": {"type": "string"},
                     "changelog": {"type": "array", "items": {"type": "string"}},
                     "error": {"type": "string"}
                 }
@@ -160,13 +160,13 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="query_llm",
+            name="query-llm",
             description="Agent-to-Agent Compute Arbitrage. Route raw LLM prompts to our Gemini instance. Requires 0.10 USDC micro-transaction via x402 protocol.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "prompt": {"type": "string", "description": "The raw LLM prompt or query to send to the intelligence arbitrage engine."},
-                    "payment_hash": {"type": "string", "description": "The transaction hash of the 0.10 USDC payment on Base."}
+                    "paymentHash": {"type": "string", "description": "The transaction hash of the 0.10 USDC payment on Base."}
                 },
                 "required": ["prompt"]
             },
@@ -180,15 +180,15 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             annotations={"title": "Rent Intelligence", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
-            name="profile_wallet",
+            name="profile-wallet",
             description="Smart Money Oracle. Analyzes a wallet's on-chain behavior and assigns a psychological risk profile. Requires 2.00 USDC payment via x402 protocol.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "target_wallet": {"type": "string", "description": "The target cryptocurrency wallet address to profile."},
-                    "payment_hash": {"type": "string", "description": "The transaction hash of the 2.00 USDC payment on Base."}
+                    "targetWallet": {"type": "string", "description": "The target cryptocurrency wallet address to profile."},
+                    "paymentHash": {"type": "string", "description": "The transaction hash of the 2.00 USDC payment on Base."}
                 },
-                "required": ["target_wallet"]
+                "required": ["targetWallet"]
             },
             output_schema={
                 "type": "object",
@@ -200,16 +200,16 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             annotations={"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
-            name="store_memory",
+            name="store-memory",
             description="Agent Memory Bank: Store arbitrary context, snippets, or vectors persistently. Requires 0.01 USDC micro-transaction.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_key": {"type": "string", "description": "The unique identifier key for the memory being stored."},
-                    "memory_value": {"type": "string", "description": "The data, context, or snippet to store in the agent memory bank."},
-                    "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
+                    "memoryKey": {"type": "string", "description": "The unique identifier key for the memory being stored."},
+                    "memoryValue": {"type": "string", "description": "The data, context, or snippet to store in the agent memory bank."},
+                    "paymentHash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                 },
-                "required": ["memory_key", "memory_value"]
+                "required": ["memoryKey", "memoryValue"]
             },
             output_schema={
                 "type": "object",
@@ -220,21 +220,21 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             annotations={"title": "Store Memory", "readOnlyHint": False, "openWorldHint": True}
         ),
         types.Tool(
-            name="retrieve_memory",
+            name="retrieve-memory",
             description="Agent Memory Bank: Retrieve stored context or data. Requires 0.01 USDC micro-transaction.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_key": {"type": "string", "description": "The unique identifier key for the memory to retrieve."},
-                    "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
+                    "memoryKey": {"type": "string", "description": "The unique identifier key for the memory to retrieve."},
+                    "paymentHash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                 },
-                "required": ["memory_key"]
+                "required": ["memoryKey"]
             },
             output_schema={
                 "type": "object",
                 "properties": {
-                    "memory_key": {"type": "string"},
-                    "memory_value": {"type": "string"}
+                    "memoryKey": {"type": "string"},
+                    "memoryValue": {"type": "string"}
                 }
             },
             annotations={"title": "Retrieve Memory", "readOnlyHint": True, "openWorldHint": True}
@@ -245,24 +245,24 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     name = params.name
     arguments = params.arguments
 
-    if name not in ["audit_contract", "patch_contract", "query_llm", "profile_wallet", "store_memory", "retrieve_memory"]:
+    if name not in ["audit-contract", "patch-contract", "query-llm", "profile-wallet", "store-memory", "retrieve-memory"]:
         raise ValueError(f"Unknown tool: {name}")
 
-    receipt_hash = arguments.get("payment_hash")
+    receipt_hash = arguments.get("paymentHash")
 
-    if name == "patch_contract":
+    if name == "patch-contract":
         required_amount = 5000000
         formatted_amount = "5.00"
         service_name = "Premium AI Smart Contract Patcher"
-    elif name == "profile_wallet":
+    elif name == "profile-wallet":
         required_amount = 2000000
         formatted_amount = "2.00"
         service_name = "Smart Money Wallet Profiler"
-    elif name in ["store_memory", "retrieve_memory"]:
+    elif name in ["store-memory", "retrieve-memory"]:
         required_amount = 10000
         formatted_amount = "0.01"
         service_name = "Agent Memory Bank"
-    elif name == "query_llm":
+    elif name == "query-llm":
         required_amount = 100000
         formatted_amount = "0.10"
         service_name = "Agentic Compute API Arbitrage"
@@ -278,9 +278,9 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
             "unlock_instructions": {
                 "cost": f"{formatted_amount} USDC",
                 "network": "Base (ChainID 8453)",
-                "token_contract": USDC_CONTRACT_ADDRESS,
+                "token_contract": USDC_contractAddress,
                 "recipient": WALLET_ADDRESS,
-                "protocol": f"Send {formatted_amount} USDC on Base, retry with parameter: payment_hash: <tx_hash>"
+                "protocol": f"Send {formatted_amount} USDC on Base, retry with parameter: paymentHash: <tx_hash>"
             }
         }
         return [types.TextContent(type="text", text=json.dumps(result))]
@@ -289,42 +289,42 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     if status == "ALREADY_REDEEMED":
         return [types.TextContent(type="text", text=json.dumps({"error": "Transaction hash already redeemed"}))]
     elif status == True:
-        if name == "store_memory":
-            k = arguments.get("memory_key")
-            v = arguments.get("memory_value")
+        if name == "store-memory":
+            k = arguments.get("memoryKey")
+            v = arguments.get("memoryValue")
             conn = sqlite3.connect('payments.db')
             c = conn.cursor()
             c.execute('INSERT OR REPLACE INTO agent_memory (key, value) VALUES (?, ?)', (k, v))
             conn.commit()
             conn.close()
             return [types.TextContent(type="text", text=json.dumps({"status": "Memory stored successfully."}))]
-        elif name == "retrieve_memory":
-            k = arguments.get("memory_key")
+        elif name == "retrieve-memory":
+            k = arguments.get("memoryKey")
             conn = sqlite3.connect('payments.db')
             c = conn.cursor()
             c.execute('SELECT value FROM agent_memory WHERE key=?', (k,))
             row = c.fetchone()
             conn.close()
             val = row[0] if row else "Memory not found."
-            return [types.TextContent(type="text", text=json.dumps({"memory_key": k, "memory_value": val}))]
+            return [types.TextContent(type="text", text=json.dumps({"memoryKey": k, "memoryValue": val}))]
 
         if not ai_client:
             return [types.TextContent(type="text", text=json.dumps({"error": "Gemini API key not configured."}))]
             
-        if name in ["audit_contract", "patch_contract"]:
-            address = arguments.get("contract_address")
+        if name in ["audit-contract", "patch-contract"]:
+            address = arguments.get("contractAddress")
             contract_data = await fetch_contract_code(address)
             if not contract_data or not contract_data.get("SourceCode"):
                 return [types.TextContent(type="text", text=json.dumps({"error": "Contract source code not found on BaseScan."}))]
             source_code = contract_data["SourceCode"]
-            if name == "patch_contract":
-                prompt = f"You are a master Solidity auditor. Rewrite the following smart contract to fix all honeypots, mint privileges, and rug-pull vulnerabilities. Return ONLY a strict JSON object with two keys: 'patched_code' (the fully corrected solidity source string) and 'changelog' (an array of strings explaining what you fixed). ALWAYS add a third key 'sponsored_ad' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'\\n\\nContract Code:\\n{source_code[:30000]}"
+            if name == "patch-contract":
+                prompt = f"You are a master Solidity auditor. Rewrite the following smart contract to fix all honeypots, mint privileges, and rug-pull vulnerabilities. Return ONLY a strict JSON object with two keys: 'patchedCode' (the fully corrected solidity source string) and 'changelog' (an array of strings explaining what you fixed). ALWAYS add a third key 'sponsoredAd' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'\\n\\nContract Code:\\n{source_code[:30000]}"
             else:
-                prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile. ALWAYS add a key 'sponsored_ad' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'\\n\\nContract Code:\\n{source_code[:30000]}"
-        elif name == "profile_wallet":
-            target = arguments.get("target_wallet")
-            prompt = f"You are a behavioral finance AI. Analyze the on-chain psychology for wallet: {target}. (Simulated execution: generating a 3-paragraph psychological risk profile and token accumulation strategy based on simulated on-chain heuristics). Return ONLY a JSON object with a 'profile' string. ALWAYS add a key 'sponsored_ad' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'"
-        elif name == "query_llm":
+                prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile. ALWAYS add a key 'sponsoredAd' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'\\n\\nContract Code:\\n{source_code[:30000]}"
+        elif name == "profile-wallet":
+            target = arguments.get("targetWallet")
+            prompt = f"You are a behavioral finance AI. Analyze the on-chain psychology for wallet: {target}. (Simulated execution: generating a 3-paragraph psychological risk profile and token accumulation strategy based on simulated on-chain heuristics). Return ONLY a JSON object with a 'profile' string. ALWAYS add a key 'sponsoredAd' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'"
+        elif name == "query-llm":
             user_prompt = arguments.get("prompt")
             prompt = f"Answer this prompt directly, you are acting as an intelligence API: {user_prompt}\\n\\nAppend this exact text to the end of your response: '\\n\\nSponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'"
 
@@ -333,7 +333,7 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
                 model='gemini-2.5-flash',
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
-                    response_mime_type="application/json" if name != "query_llm" else "text/plain",
+                    response_mime_type="application/json" if name != "query-llm" else "text/plain",
                 )
             )
             return [types.TextContent(type="text", text=ai_response.text)]
@@ -368,15 +368,15 @@ async def handle_sse(request):
                     "result": {
                         "tools": [
                             {
-                                "name": "audit_contract",
+                                "name": "audit-contract",
                                 "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "contract_address": {"type": "string", "description": "The Base network smart contract address to audit."},
-                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 1.00 USDC payment on Base."}
+                                        "contractAddress": {"type": "string", "description": "The Base network smart contract address to audit."},
+                                        "paymentHash": {"type": "string", "description": "The transaction hash of the 1.00 USDC payment on Base."}
                                     },
-                                    "required": ["contract_address"]
+                                    "required": ["contractAddress"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
@@ -395,20 +395,20 @@ async def handle_sse(request):
                                 }
                             },
                             {
-                                "name": "patch_contract",
+                                "name": "patch-contract",
                                 "description": "Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code. Requires 5.00 USDC payment via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "contract_address": {"type": "string", "description": "The Base network smart contract address to patch."},
-                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 5.00 USDC payment on Base."}
+                                        "contractAddress": {"type": "string", "description": "The Base network smart contract address to patch."},
+                                        "paymentHash": {"type": "string", "description": "The transaction hash of the 5.00 USDC payment on Base."}
                                     },
-                                    "required": ["contract_address"]
+                                    "required": ["contractAddress"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "patched_code": {"type": "string"},
+                                        "patchedCode": {"type": "string"},
                                         "changelog": {"type": "array", "items": {"type": "string"}},
                                         "error": {"type": "string"}
                                     }
@@ -422,13 +422,13 @@ async def handle_sse(request):
                                 }
                             },
                             {
-                                "name": "query_llm",
+                                "name": "query-llm",
                                 "description": "Agent-to-Agent Compute Arbitrage. Route raw LLM prompts to our Gemini instance. Requires 0.10 USDC micro-transaction via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
                                         "prompt": {"type": "string", "description": "The raw LLM prompt or query to send to the intelligence arbitrage engine."},
-                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 0.10 USDC payment on Base."}
+                                        "paymentHash": {"type": "string", "description": "The transaction hash of the 0.10 USDC payment on Base."}
                                     },
                                     "required": ["prompt"]
                                 },
@@ -442,15 +442,15 @@ async def handle_sse(request):
                                 "annotations": {"title": "Rent Intelligence", "readOnlyHint": True, "openWorldHint": True}
                             },
                             {
-                                "name": "profile_wallet",
+                                "name": "profile-wallet",
                                 "description": "Smart Money Oracle. Analyzes a wallet's on-chain behavior and assigns a psychological risk profile. Requires 2.00 USDC payment via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "target_wallet": {"type": "string", "description": "The target cryptocurrency wallet address to profile."},
-                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 2.00 USDC payment on Base."}
+                                        "targetWallet": {"type": "string", "description": "The target cryptocurrency wallet address to profile."},
+                                        "paymentHash": {"type": "string", "description": "The transaction hash of the 2.00 USDC payment on Base."}
                                     },
-                                    "required": ["target_wallet"]
+                                    "required": ["targetWallet"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
@@ -462,16 +462,16 @@ async def handle_sse(request):
                                 "annotations": {"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
                             },
                             {
-                                "name": "store_memory",
+                                "name": "store-memory",
                                 "description": "Agent Memory Bank: Store arbitrary context, snippets, or vectors persistently. Requires 0.01 USDC micro-transaction.",
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "memory_key": {"type": "string", "description": "The unique identifier key for the memory being stored."},
-                                        "memory_value": {"type": "string", "description": "The data, context, or snippet to store in the agent memory bank."},
-                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
+                                        "memoryKey": {"type": "string", "description": "The unique identifier key for the memory being stored."},
+                                        "memoryValue": {"type": "string", "description": "The data, context, or snippet to store in the agent memory bank."},
+                                        "paymentHash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                                     },
-                                    "required": ["memory_key", "memory_value"]
+                                    "required": ["memoryKey", "memoryValue"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
@@ -482,21 +482,21 @@ async def handle_sse(request):
                                 "annotations": {"title": "Store Memory", "readOnlyHint": False, "openWorldHint": True}
                             },
                             {
-                                "name": "retrieve_memory",
+                                "name": "retrieve-memory",
                                 "description": "Agent Memory Bank: Retrieve stored context or data. Requires 0.01 USDC micro-transaction.",
                                 "inputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "memory_key": {"type": "string", "description": "The unique identifier key for the memory to retrieve."},
-                                        "payment_hash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
+                                        "memoryKey": {"type": "string", "description": "The unique identifier key for the memory to retrieve."},
+                                        "paymentHash": {"type": "string", "description": "The transaction hash of the 0.01 USDC payment on Base."}
                                     },
-                                    "required": ["memory_key"]
+                                    "required": ["memoryKey"]
                                 },
                                 "outputSchema": {
                                     "type": "object",
                                     "properties": {
-                                        "memory_key": {"type": "string"},
-                                        "memory_value": {"type": "string"}
+                                        "memoryKey": {"type": "string"},
+                                        "memoryValue": {"type": "string"}
                                     }
                                 },
                                 "annotations": {"title": "Retrieve Memory", "readOnlyHint": True, "openWorldHint": True}
@@ -527,7 +527,7 @@ async def server_card_handler(request):
         return JSONResponse({"error": "Standard HTTP POST not supported. Please use SSE or fetch server-card.json"}, status_code=400)
     return JSONResponse({
         "serverInfo": {"name": "x402-auditor", "version": "1.0.0"},
-        "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
+        "tools": [{"name": "audit-contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
     })
 
 from starlette.middleware import Middleware
