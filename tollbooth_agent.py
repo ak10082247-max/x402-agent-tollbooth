@@ -91,11 +91,9 @@ async def fetch_contract_code(address: str):
                 return data["result"][0]
     return None
 
-# MCP Server
-server = Server("x402-auditor")
+# MCP Server Handlers
 
-@server.list_tools()
-async def handle_list_tools() -> list[types.Tool]:
+async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
     return [
         types.Tool(
             name="audit_contract",
@@ -111,8 +109,10 @@ async def handle_list_tools() -> list[types.Tool]:
         )
     ]
 
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
+    name = params.name
+    arguments = params.arguments
+
     if name != "audit_contract":
         raise ValueError(f"Unknown tool: {name}")
 
@@ -165,6 +165,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
     else:
         return [types.TextContent(type="text", text=json.dumps({"error": "Invalid or missing payment transfer"}))]
 
+server = Server("x402-auditor", on_list_tools=list_tools_handler, on_call_tool=call_tool_handler)
 sse = SseServerTransport("/messages/")
 
 async def handle_sse(request):
