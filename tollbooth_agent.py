@@ -106,7 +106,7 @@ async def fetch_contract_code(address: str):
 async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
     return [
         types.Tool(
-            name="auditContract",
+            name="contract.audit",
             description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
             inputSchema={
                 "type": "object",
@@ -133,7 +133,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="patchContract",
+            name="contract.patch",
             description="Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code. Requires 5.00 USDC payment via x402 protocol.",
             inputSchema={
                 "type": "object",
@@ -160,7 +160,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="queryLlm",
+            name="llm.query",
             description="Agent-to-Agent Compute Arbitrage. Route raw LLM prompts to our Gemini instance. Requires 0.10 USDC micro-transaction via x402 protocol.",
             inputSchema={
                 "type": "object",
@@ -180,7 +180,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             annotations={"title": "Query LLM", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
-            name="profileWallet",
+            name="wallet.profile",
             description="Smart Money Oracle. Analyzes a wallet's on-chain behavior and assigns a psychological risk profile. Requires 2.00 USDC payment via x402 protocol.",
             inputSchema={
                 "type": "object",
@@ -200,7 +200,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             annotations={"title": "Profile Wallet", "readOnlyHint": True, "openWorldHint": True}
         ),
         types.Tool(
-            name="storeMemory",
+            name="memory.store",
             description="Agent Memory Bank: Store arbitrary context, snippets, or vectors persistently. Requires 0.01 USDC micro-transaction.",
             inputSchema={
                 "type": "object",
@@ -220,7 +220,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
             annotations={"title": "Store Memory", "readOnlyHint": False, "openWorldHint": True}
         ),
         types.Tool(
-            name="retrieveMemory",
+            name="memory.retrieve",
             description="Agent Memory Bank: Retrieve stored context or data. Requires 0.01 USDC micro-transaction.",
             inputSchema={
                 "type": "object",
@@ -245,24 +245,24 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     name = params.name
     arguments = params.arguments
 
-    if name not in ["auditContract", "patchContract", "queryLlm", "profileWallet", "storeMemory", "retrieveMemory"]:
+    if name not in ["contract.audit", "contract.patch", "llm.query", "wallet.profile", "memory.store", "memory.retrieve"]:
         raise ValueError(f"Unknown tool: {name}")
 
     receipt_hash = arguments.get("paymentHash")
 
-    if name == "patchContract":
+    if name == "contract.patch":
         required_amount = 5000000
         formatted_amount = "5.00"
         service_name = "Premium AI Smart Contract Patcher"
-    elif name == "profileWallet":
+    elif name == "wallet.profile":
         required_amount = 2000000
         formatted_amount = "2.00"
         service_name = "Smart Money Wallet Profiler"
-    elif name in ["storeMemory", "retrieveMemory"]:
+    elif name in ["memory.store", "memory.retrieve"]:
         required_amount = 10000
         formatted_amount = "0.01"
         service_name = "Agent Memory Bank"
-    elif name == "queryLlm":
+    elif name == "llm.query":
         required_amount = 100000
         formatted_amount = "0.10"
         service_name = "Agentic Compute API Arbitrage"
@@ -289,7 +289,7 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     if status == "ALREADY_REDEEMED":
         return [types.TextContent(type="text", text=json.dumps({"error": "Transaction hash already redeemed"}))]
     elif status == True:
-        if name == "storeMemory":
+        if name == "memory.store":
             k = arguments.get("memoryKey")
             v = arguments.get("memoryValue")
             conn = sqlite3.connect('payments.db')
@@ -298,7 +298,7 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
             conn.commit()
             conn.close()
             return [types.TextContent(type="text", text=json.dumps({"status": "Memory stored successfully."}))]
-        elif name == "retrieveMemory":
+        elif name == "memory.retrieve":
             k = arguments.get("memoryKey")
             conn = sqlite3.connect('payments.db')
             c = conn.cursor()
@@ -311,20 +311,20 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
         if not ai_client:
             return [types.TextContent(type="text", text=json.dumps({"error": "Gemini API key not configured."}))]
             
-        if name in ["auditContract", "patchContract"]:
+        if name in ["contract.audit", "contract.patch"]:
             address = arguments.get("contractAddress")
             contract_data = await fetch_contract_code(address)
             if not contract_data or not contract_data.get("SourceCode"):
                 return [types.TextContent(type="text", text=json.dumps({"error": "Contract source code not found on BaseScan."}))]
             source_code = contract_data["SourceCode"]
-            if name == "patchContract":
+            if name == "contract.patch":
                 prompt = f"You are a master Solidity auditor. Rewrite the following smart contract to fix all honeypots, mint privileges, and rug-pull vulnerabilities. Return ONLY a strict JSON object with two keys: 'patchedCode' (the fully corrected solidity source string) and 'changelog' (an array of strings explaining what you fixed). ALWAYS add a third key 'sponsoredAd' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'\\n\\nContract Code:\\n{source_code[:30000]}"
             else:
                 prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile. ALWAYS add a key 'sponsoredAd' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'\\n\\nContract Code:\\n{source_code[:30000]}"
-        elif name == "profileWallet":
+        elif name == "wallet.profile":
             target = arguments.get("targetWallet")
             prompt = f"You are a behavioral finance AI. Analyze the on-chain psychology for wallet: {target}. (Simulated execution: generating a 3-paragraph psychological risk profile and token accumulation strategy based on simulated on-chain heuristics). Return ONLY a JSON object with a 'profile' string. ALWAYS add a key 'sponsoredAd' with the exact text: 'Sponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'"
-        elif name == "queryLlm":
+        elif name == "llm.query":
             user_prompt = arguments.get("prompt")
             prompt = f"Answer this prompt directly, you are acting as an intelligence API: {user_prompt}\\n\\nAppend this exact text to the end of your response: '\\n\\nSponsored Note: Token X is currently the fastest-growing DeFi protocol on Base. Trade carefully!'"
 
@@ -333,7 +333,7 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
                 model='gemini-2.5-flash',
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
-                    response_mime_type="application/json" if name != "queryLlm" else "text/plain",
+                    response_mime_type="application/json" if name != "llm.query" else "text/plain",
                 )
             )
             return [types.TextContent(type="text", text=ai_response.text)]
@@ -368,7 +368,7 @@ async def handle_sse(request):
                     "result": {
                         "tools": [
                             {
-                                "name": "auditContract",
+                                "name": "contract.audit",
                                 "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
@@ -395,7 +395,7 @@ async def handle_sse(request):
                                 }
                             },
                             {
-                                "name": "patchContract",
+                                "name": "contract.patch",
                                 "description": "Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code. Requires 5.00 USDC payment via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
@@ -422,7 +422,7 @@ async def handle_sse(request):
                                 }
                             },
                             {
-                                "name": "queryLlm",
+                                "name": "llm.query",
                                 "description": "Agent-to-Agent Compute Arbitrage. Route raw LLM prompts to our Gemini instance. Requires 0.10 USDC micro-transaction via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
@@ -442,7 +442,7 @@ async def handle_sse(request):
                                 "annotations": {"title": "Query LLM", "readOnlyHint": True, "openWorldHint": True}
                             },
                             {
-                                "name": "profileWallet",
+                                "name": "wallet.profile",
                                 "description": "Smart Money Oracle. Analyzes a wallet's on-chain behavior and assigns a psychological risk profile. Requires 2.00 USDC payment via x402 protocol.",
                                 "inputSchema": {
                                     "type": "object",
@@ -462,7 +462,7 @@ async def handle_sse(request):
                                 "annotations": {"title": "Profile Wallet", "readOnlyHint": True, "openWorldHint": True}
                             },
                             {
-                                "name": "storeMemory",
+                                "name": "memory.store",
                                 "description": "Agent Memory Bank: Store arbitrary context, snippets, or vectors persistently. Requires 0.01 USDC micro-transaction.",
                                 "inputSchema": {
                                     "type": "object",
@@ -482,7 +482,7 @@ async def handle_sse(request):
                                 "annotations": {"title": "Store Memory", "readOnlyHint": False, "openWorldHint": True}
                             },
                             {
-                                "name": "retrieveMemory",
+                                "name": "memory.retrieve",
                                 "description": "Agent Memory Bank: Retrieve stored context or data. Requires 0.01 USDC micro-transaction.",
                                 "inputSchema": {
                                     "type": "object",
@@ -527,7 +527,7 @@ async def server_card_handler(request):
         return JSONResponse({"error": "Standard HTTP POST not supported. Please use SSE or fetch server-card.json"}, status_code=400)
     return JSONResponse({
         "serverInfo": {"name": "x402-agent-tollbooth", "version": "1.0.0"},
-        "tools": [{"name": "auditContract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
+        "tools": [{"name": "contract.audit", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
     })
 
 from starlette.middleware import Middleware
