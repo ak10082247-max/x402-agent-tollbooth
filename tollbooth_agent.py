@@ -179,7 +179,51 @@ sse = SseServerTransport("/messages/")
 
 async def handle_sse(request):
     if request.method == "POST":
-        return JSONResponse({"error": "SSE endpoint requires GET"}, status_code=400)
+        try:
+            body = await request.json()
+            method = body.get("method")
+            msg_id = body.get("id")
+            if method == "initialize":
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"}
+                    }
+                })
+            elif method == "tools/list":
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {
+                        "tools": [{
+                            "name": "audit_contract",
+                            "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "contract_address": {"type": "string", "description": "The Base contract address to audit"},
+                                    "user_wallet": {"type": "string", "description": "The wallet address making the request"}
+                                },
+                                "required": ["contract_address", "user_wallet"]
+                            }
+                        }]
+                    }
+                })
+            elif method in ["resources/list", "prompts/list"]:
+                key = "resources" if "resources" in method else "prompts"
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {key: []}
+                })
+            else:
+                return JSONResponse({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Method not found"}})
+        except Exception:
+            return JSONResponse({"error": "Bad Request"}, status_code=400)
+    
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())
 
