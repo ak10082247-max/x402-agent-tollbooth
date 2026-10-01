@@ -179,7 +179,7 @@ sse = SseServerTransport("/messages/")
 
 async def handle_sse(request):
     if request.method == "POST":
-        return JSONResponse({"error": "SSE endpoint requires GET"}, status_code=400)
+        return JSONResponse({"serverInfo": {"name": "x402-auditor", "version": "1.0.0"}, "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]}, status_code=200)
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())
 
@@ -187,8 +187,6 @@ async def handle_messages(request):
     await sse.handle_post_message(request.scope, request.receive, request._send)
 
 async def server_card_handler(request):
-    if request.method == "POST":
-        return JSONResponse({"error": "Requires GET"}, status_code=400)
     return JSONResponse({"serverInfo": {"name": "x402-auditor", "version": "1.0.0"}, "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]})
 
 from starlette.middleware import Middleware
@@ -198,8 +196,7 @@ mcp_app = Starlette(
     routes=[
         Route("/sse", endpoint=handle_sse, methods=["GET", "POST", "OPTIONS"]),
         Route("/messages/", endpoint=handle_messages, methods=["POST", "OPTIONS"]),
-        Route("/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET", "POST", "OPTIONS"]),
-        Route("/sse/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET", "POST", "OPTIONS"])
+        Route("/{path:path}", endpoint=server_card_handler, methods=["GET", "POST", "OPTIONS"])
     ],
     middleware=[
         Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
