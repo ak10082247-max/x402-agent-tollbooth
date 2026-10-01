@@ -47,7 +47,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def verify_payment(tx_hash: str):
+def verify_payment(tx_hash: str, expected_amount: int):
     try:
         conn = sqlite3.connect('payments.db')
         c = conn.cursor()
@@ -73,7 +73,7 @@ def verify_payment(tx_hash: str):
                     if to_address.lower() == WALLET_ADDRESS.lower():
                         data = log["data"]
                         value = int(data, 16) if isinstance(data, str) else int(data.hex(), 16)
-                        if value == EXPECTED_AMOUNT:
+                        if value == expected_amount:
                             is_valid = True
                             break
         
@@ -130,6 +130,33 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                 "idempotentHint": True,
                 "openWorldHint": True
             }
+        ),
+        types.Tool(
+            name="auto_patch_contract",
+            description="Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code. Requires 5.00 USDC payment via x402 protocol.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "contract_address": {"type": "string"},
+                    "payment_hash": {"type": "string"}
+                },
+                "required": ["contract_address"]
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "patched_code": {"type": "string"},
+                    "changelog": {"type": "array", "items": {"type": "string"}},
+                    "error": {"type": "string"}
+                }
+            },
+            annotations={
+                "title": "Auto Contract Patcher",
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True
+            }
         )
     ]
 
@@ -137,11 +164,15 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     name = params.name
     arguments = params.arguments
 
-    if name != "audit_contract":
+    if name not in ["audit_contract", "auto_patch_contract"]:
         raise ValueError(f"Unknown tool: {name}")
 
     address = arguments.get("contract_address")
     receipt_hash = arguments.get("payment_hash")
+
+    required_amount = 5000000 if name == "auto_patch_contract" else 1000000
+    formatted_amount = "5.00" if name == "auto_patch_contract" else "1.00"
+    service_name = "Premium AI Smart Contract Patcher" if name == "auto_patch_contract" else "Deep AI Vulnerability Audit"
 
     if not receipt_hash:
         contract_data = await fetch_contract_code(address)
@@ -151,18 +182,18 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
             "error": "Payment Required",
             "contract_name": contract_name,
             "compiler_version": compiler,
-            "status": "Deep AI Vulnerability Audit locked. Pay 1.00 USDC on Base to 0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1 to unlock.",
+            "status": f"{service_name} locked. Pay {formatted_amount} USDC on Base to {WALLET_ADDRESS} to unlock.",
             "unlock_instructions": {
-                "cost": "1.00 USDC",
+                "cost": f"{formatted_amount} USDC",
                 "network": "Base (ChainID 8453)",
                 "token_contract": USDC_CONTRACT_ADDRESS,
                 "recipient": WALLET_ADDRESS,
-                "protocol": "Send 1.00 USDC on Base, retry with parameter: payment_hash: <tx_hash>"
+                "protocol": f"Send {formatted_amount} USDC on Base, retry with parameter: payment_hash: <tx_hash>"
             }
         }
         return [types.TextContent(type="text", text=json.dumps(result))]
 
-    status = verify_payment(receipt_hash)
+    status = verify_payment(receipt_hash, required_amount)
     if status == "ALREADY_REDEEMED":
         return [types.TextContent(type="text", text=json.dumps({"error": "Transaction hash already redeemed"}))]
     elif status == True:
@@ -172,7 +203,11 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
         
         source_code = contract_data["SourceCode"]
         if ai_client:
-            prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile.\\n\\nContract Code:\\n{source_code[:30000]}"
+            if name == "auto_patch_contract":
+                prompt = f"You are a master Solidity auditor. Rewrite the following smart contract to fix all honeypots, mint privileges, and rug-pull vulnerabilities. Return ONLY a strict JSON object with two keys: 'patched_code' (the fully corrected solidity source string) and 'changelog' (an array of strings explaining what you fixed).\\n\\nContract Code:\\n{source_code[:30000]}"
+            else:
+                prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile.\\n\\nContract Code:\\n{source_code[:30000]}"
+            
             try:
                 ai_response = ai_client.models.generate_content(
                     model='gemini-2.5-flash',
@@ -213,33 +248,62 @@ async def handle_sse(request):
                     "jsonrpc": "2.0",
                     "id": msg_id,
                     "result": {
-                        "tools": [{
-                            "name": "audit_contract",
-                            "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "contract_address": {"type": "string", "description": "The Base contract address to audit"},
-                                    "user_wallet": {"type": "string", "description": "The wallet address making the request"}
+                        "tools": [
+                            {
+                                "name": "audit_contract",
+                                "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "contract_address": {"type": "string", "description": "The Base contract address to audit"},
+                                        "user_wallet": {"type": "string", "description": "The wallet address making the request"}
+                                    },
+                                    "required": ["contract_address", "user_wallet"]
                                 },
-                                "required": ["contract_address", "user_wallet"]
-                            },
-                            "outputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "vulnerabilities": {"type": "array", "items": {"type": "string"}},
-                                    "score": {"type": "number"},
-                                    "error": {"type": "string"}
+                                "outputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "vulnerabilities": {"type": "array", "items": {"type": "string"}},
+                                        "score": {"type": "number"},
+                                        "error": {"type": "string"}
+                                    }
+                                },
+                                "annotations": {
+                                    "title": "Live Contract Auditor",
+                                    "readOnlyHint": True,
+                                    "destructiveHint": False,
+                                    "idempotentHint": True,
+                                    "openWorldHint": True
                                 }
                             },
-                            "annotations": {
-                                "title": "Live Contract Auditor",
-                                "readOnlyHint": True,
-                                "destructiveHint": False,
-                                "idempotentHint": True,
-                                "openWorldHint": True
+                            {
+                                "name": "auto_patch_contract",
+                                "description": "Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code. Requires 5.00 USDC payment via x402 protocol.",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "contract_address": {"type": "string", "description": "The Base contract address to audit"},
+                                        "user_wallet": {"type": "string", "description": "The wallet address making the request"}
+                                    },
+                                    "required": ["contract_address", "user_wallet"]
+                                },
+                                "outputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "patched_code": {"type": "string"},
+                                        "changelog": {"type": "array", "items": {"type": "string"}},
+                                        "error": {"type": "string"}
+                                    }
+                                },
+                                "annotations": {
+                                    "title": "Auto Contract Patcher",
+                                    "readOnlyHint": True,
+                                    "destructiveHint": False,
+                                    "idempotentHint": True,
+                                    "openWorldHint": True
+                                }
                             }
-                        }]
+                        ]
                     }
                 })
             elif method in ["resources/list", "prompts/list"]:
