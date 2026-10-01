@@ -9,3 +9,4 @@ startCommand:
       - --port
       - '8000'
 configSchema: {}
+description: "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."

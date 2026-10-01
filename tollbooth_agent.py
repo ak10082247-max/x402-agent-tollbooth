@@ -2,6 +2,8 @@ import os
 import json
 import sqlite3
 import uvicorn
+import httpx
+from google import genai
 from typing import Optional
 from fastapi import FastAPI, Request, Query, Header, HTTPException, Response
 from fastapi.responses import PlainTextResponse, JSONResponse
@@ -12,10 +14,14 @@ WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
 EXPECTED_AMOUNT = 1000000  # 1.00 USDC, 6 decimals
 TRANSFER_EVENT_SIGNATURE = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
+# Initialize Gemini client
+gemini_api_key = os.environ.get("GEMINI_API_KEY")
+ai_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
+
 app = FastAPI(
-    title="x402 Agent Tollbooth - API Fix Engine",
-    version="2.0.0",
-    description="High-conversion, multi-schema monetization hub with programmatic SEO and Web3 on-chain payment verification."
+    title="x402 Agent Tollbooth - API Fix Engine & Smart Contract Auditor",
+    version="2.1.0",
+    description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."
 )
 
 w3 = Web3(Web3.HTTPProvider("https://mainnet.base.org"))
@@ -162,6 +168,77 @@ async def get_schema(request: Request, dataset_name: str, full: Optional[bool] =
             "token_contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
             "recipient": WALLET_ADDRESS,
             "protocol": "Send 1.00 USDC on Base, retry with header: X-PAYMENT: <tx_hash>"
+        }
+    })
+
+async def fetch_contract_code(address: str):
+    url = f"https://api.basescan.org/api?module=contract&action=getsourcecode&address={address}"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "1" and data.get("result"):
+                return data["result"][0]
+    return None
+
+@app.get("/v1/audit/contract/{address}")
+async def audit_contract(request: Request, address: str, full: Optional[bool] = Query(False)):
+    receipt_hash = request.headers.get("x-payment")
+    
+    # Fulfillment
+    if receipt_hash:
+        status = verify_payment(receipt_hash)
+        if status == "ALREADY_REDEEMED":
+            return JSONResponse(status_code=409, content={"error": "Transaction hash already redeemed"})
+        elif status == True:
+            contract_data = await fetch_contract_code(address)
+            if not contract_data or not contract_data.get("SourceCode"):
+                return JSONResponse(status_code=404, content={"error": "Contract source code not found or not verified on BaseScan."})
+            
+            source_code = contract_data["SourceCode"]
+            if ai_client:
+                prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile.\\n\\nContract Code:\\n{source_code[:30000]}"
+                try:
+                    ai_response = ai_client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=prompt,
+                        config=genai.types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                        )
+                    )
+                    return JSONResponse(content={"audit": json.loads(ai_response.text)})
+                except Exception as e:
+                    return JSONResponse(status_code=500, content={"error": f"AI analysis failed: {str(e)}"})
+            else:
+                return JSONResponse(status_code=500, content={"error": "Gemini API key not configured."})
+        else:
+            return JSONResponse(status_code=400, content={"detail": "Invalid or missing payment transfer"})
+            
+    # Challenge
+    if full:
+        headers = {
+            "x-402-payment-required": "true",
+            "x-402-token": "USDC",
+            "x-402-network": "base",
+            "x-402-amount": "1000000",
+            "x-402-recipient": WALLET_ADDRESS
+        }
+        return JSONResponse(status_code=402, content={"detail": "Payment Required"}, headers=headers)
+        
+    # Freemium Preview
+    contract_data = await fetch_contract_code(address)
+    name = "Unknown"
+    compiler = "Unknown"
+    if contract_data:
+        name = contract_data.get("ContractName", "Unknown")
+        compiler = contract_data.get("CompilerVersion", "Unknown")
+        
+    return JSONResponse(content={
+        "contract_name": name,
+        "compiler_version": compiler,
+        "status": "Deep AI Vulnerability Audit locked. Pay 1.00 USDC on Base to 0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1 to unlock.",
+        "unlock_instructions": {
+            "full_endpoint": f"https://x402-agent-tollbooth.onrender.com/v1/audit/contract/{address}?full=true"
         }
     })
 
