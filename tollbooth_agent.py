@@ -179,11 +179,19 @@ async def handle_messages(request):
 async def server_card_handler(request):
     return JSONResponse({"serverInfo": {"name": "x402-auditor", "version": "1.0.0"}, "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]})
 
-mcp_app = Starlette(routes=[
-    Route("/sse", endpoint=handle_sse, methods=["GET"]),
-    Route("/messages/", endpoint=handle_messages, methods=["POST"]),
-    Route("/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET"])
-])
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+
+mcp_app = Starlette(
+    routes=[
+        Route("/sse", endpoint=handle_sse, methods=["GET"]),
+        Route("/messages/", endpoint=handle_messages, methods=["POST"]),
+        Route("/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET"])
+    ],
+    middleware=[
+        Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    ]
+)
 
 app.mount("/", mcp_app)
 
