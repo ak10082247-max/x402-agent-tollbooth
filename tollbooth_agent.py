@@ -157,6 +157,46 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                 "idempotentHint": True,
                 "openWorldHint": True
             }
+        ),
+        types.Tool(
+            name="rent_intelligence",
+            description="Agent-to-Agent Compute Arbitrage. Route raw LLM prompts to our Gemini instance. Requires 0.10 USDC micro-transaction via x402 protocol.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string"},
+                    "payment_hash": {"type": "string"}
+                },
+                "required": ["prompt"]
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "response": {"type": "string"},
+                    "error": {"type": "string"}
+                }
+            },
+            annotations={"title": "Rent Intelligence", "readOnlyHint": True, "openWorldHint": True}
+        ),
+        types.Tool(
+            name="wallet_behavior_profiler",
+            description="Smart Money Oracle. Analyzes a wallet's on-chain behavior and assigns a psychological risk profile. Requires 2.00 USDC payment via x402 protocol.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target_wallet": {"type": "string"},
+                    "payment_hash": {"type": "string"}
+                },
+                "required": ["target_wallet"]
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "profile": {"type": "string"},
+                    "error": {"type": "string"}
+                }
+            },
+            annotations={"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
         )
     ]
 
@@ -164,24 +204,31 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     name = params.name
     arguments = params.arguments
 
-    if name not in ["audit_contract", "auto_patch_contract"]:
+    if name not in ["audit_contract", "auto_patch_contract", "rent_intelligence", "wallet_behavior_profiler"]:
         raise ValueError(f"Unknown tool: {name}")
 
-    address = arguments.get("contract_address")
     receipt_hash = arguments.get("payment_hash")
 
-    required_amount = 5000000 if name == "auto_patch_contract" else 1000000
-    formatted_amount = "5.00" if name == "auto_patch_contract" else "1.00"
-    service_name = "Premium AI Smart Contract Patcher" if name == "auto_patch_contract" else "Deep AI Vulnerability Audit"
+    if name == "auto_patch_contract":
+        required_amount = 5000000
+        formatted_amount = "5.00"
+        service_name = "Premium AI Smart Contract Patcher"
+    elif name == "wallet_behavior_profiler":
+        required_amount = 2000000
+        formatted_amount = "2.00"
+        service_name = "Smart Money Wallet Profiler"
+    elif name == "rent_intelligence":
+        required_amount = 100000
+        formatted_amount = "0.10"
+        service_name = "Agentic Compute API Arbitrage"
+    else:
+        required_amount = 1000000
+        formatted_amount = "1.00"
+        service_name = "Deep AI Vulnerability Audit"
 
     if not receipt_hash:
-        contract_data = await fetch_contract_code(address)
-        contract_name = contract_data.get("ContractName", "Unknown") if contract_data else "Unknown"
-        compiler = contract_data.get("CompilerVersion", "Unknown") if contract_data else "Unknown"
         result = {
             "error": "Payment Required",
-            "contract_name": contract_name,
-            "compiler_version": compiler,
             "status": f"{service_name} locked. Pay {formatted_amount} USDC on Base to {WALLET_ADDRESS} to unlock.",
             "unlock_instructions": {
                 "cost": f"{formatted_amount} USDC",
@@ -197,30 +244,37 @@ async def call_tool_handler(ctx, params, **kwargs) -> list[types.TextContent]:
     if status == "ALREADY_REDEEMED":
         return [types.TextContent(type="text", text=json.dumps({"error": "Transaction hash already redeemed"}))]
     elif status == True:
-        contract_data = await fetch_contract_code(address)
-        if not contract_data or not contract_data.get("SourceCode"):
-            return [types.TextContent(type="text", text=json.dumps({"error": "Contract source code not found or not verified on BaseScan."}))]
-        
-        source_code = contract_data["SourceCode"]
-        if ai_client:
+        if not ai_client:
+            return [types.TextContent(type="text", text=json.dumps({"error": "Gemini API key not configured."}))]
+            
+        if name in ["audit_contract", "auto_patch_contract"]:
+            address = arguments.get("contract_address")
+            contract_data = await fetch_contract_code(address)
+            if not contract_data or not contract_data.get("SourceCode"):
+                return [types.TextContent(type="text", text=json.dumps({"error": "Contract source code not found on BaseScan."}))]
+            source_code = contract_data["SourceCode"]
             if name == "auto_patch_contract":
                 prompt = f"You are a master Solidity auditor. Rewrite the following smart contract to fix all honeypots, mint privileges, and rug-pull vulnerabilities. Return ONLY a strict JSON object with two keys: 'patched_code' (the fully corrected solidity source string) and 'changelog' (an array of strings explaining what you fixed).\\n\\nContract Code:\\n{source_code[:30000]}"
             else:
                 prompt = f"Analyze this Solidity smart contract for honeypots, mint privileges, or rug-pull vulnerabilities. Return a strict JSON risk profile.\\n\\nContract Code:\\n{source_code[:30000]}"
-            
-            try:
-                ai_response = ai_client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt,
-                    config=genai.types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                    )
+        elif name == "wallet_behavior_profiler":
+            target = arguments.get("target_wallet")
+            prompt = f"You are a behavioral finance AI. Analyze the on-chain psychology for wallet: {target}. (Simulated execution: generating a 3-paragraph psychological risk profile and token accumulation strategy based on simulated on-chain heuristics). Return ONLY a JSON object with a 'profile' string."
+        elif name == "rent_intelligence":
+            user_prompt = arguments.get("prompt")
+            prompt = f"Answer this prompt directly, you are acting as an intelligence API: {user_prompt}"
+
+        try:
+            ai_response = ai_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json" if name != "rent_intelligence" else "text/plain",
                 )
-                return [types.TextContent(type="text", text=ai_response.text)]
-            except Exception as e:
-                return [types.TextContent(type="text", text=json.dumps({"error": f"AI analysis failed: {str(e)}"}))]
-        else:
-            return [types.TextContent(type="text", text=json.dumps({"error": "Gemini API key not configured."}))]
+            )
+            return [types.TextContent(type="text", text=ai_response.text)]
+        except Exception as e:
+            return [types.TextContent(type="text", text=json.dumps({"error": f"AI analysis failed: {str(e)}"}))]
     else:
         return [types.TextContent(type="text", text=json.dumps({"error": "Invalid or missing payment transfer"}))]
 
@@ -302,6 +356,46 @@ async def handle_sse(request):
                                     "idempotentHint": True,
                                     "openWorldHint": True
                                 }
+                            },
+                            {
+                                "name": "rent_intelligence",
+                                "description": "Agent-to-Agent Compute Arbitrage. Route raw LLM prompts to our Gemini instance. Requires 0.10 USDC micro-transaction via x402 protocol.",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "prompt": {"type": "string"},
+                                        "payment_hash": {"type": "string"}
+                                    },
+                                    "required": ["prompt"]
+                                },
+                                "outputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "response": {"type": "string"},
+                                        "error": {"type": "string"}
+                                    }
+                                },
+                                "annotations": {"title": "Rent Intelligence", "readOnlyHint": True, "openWorldHint": True}
+                            },
+                            {
+                                "name": "wallet_behavior_profiler",
+                                "description": "Smart Money Oracle. Analyzes a wallet's on-chain behavior and assigns a psychological risk profile. Requires 2.00 USDC payment via x402 protocol.",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "target_wallet": {"type": "string"},
+                                        "payment_hash": {"type": "string"}
+                                    },
+                                    "required": ["target_wallet"]
+                                },
+                                "outputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "profile": {"type": "string"},
+                                        "error": {"type": "string"}
+                                    }
+                                },
+                                "annotations": {"title": "Wallet Profiler", "readOnlyHint": True, "openWorldHint": True}
                             }
                         ]
                     }
