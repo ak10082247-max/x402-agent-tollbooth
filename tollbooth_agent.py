@@ -14,6 +14,7 @@ import mcp.types as types
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
@@ -28,6 +29,13 @@ app = FastAPI(
     title="x402 Agent Tollbooth - API Fix Engine & Smart Contract Auditor",
     version="2.1.0",
     description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 w3 = Web3(Web3.HTTPProvider("https://mainnet.base.org"))
