@@ -194,7 +194,8 @@ mcp_app = Starlette(
     routes=[
         Route("/sse", endpoint=handle_sse, methods=["GET", "OPTIONS"]),
         Route("/messages/", endpoint=handle_messages, methods=["POST", "OPTIONS"]),
-        Route("/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET", "OPTIONS"])
+        Route("/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET", "OPTIONS"]),
+        Route("/sse/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET", "OPTIONS"])
     ],
     middleware=[
         Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
