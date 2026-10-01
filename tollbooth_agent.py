@@ -13,6 +13,7 @@ from mcp.server.sse import SseServerTransport
 import mcp.types as types
 from starlette.applications import Starlette
 from starlette.routing import Route
+from starlette.responses import JSONResponse
 
 USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
@@ -80,14 +81,6 @@ def verify_payment(tx_hash: str):
 @app.on_event("startup")
 async def startup_event():
     init_db()
-
-@app.get("/.well-known/mcp/server-card.json")
-async def get_server_card():
-    from fastapi.responses import JSONResponse
-    return JSONResponse(content={
-        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"},
-        "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
-    })
 
 async def fetch_contract_code(address: str):
     url = f"https://api.basescan.org/api?module=contract&action=getsourcecode&address={address}"
@@ -183,9 +176,13 @@ async def handle_sse(request):
 async def handle_messages(request):
     await sse.handle_post_message(request.scope, request.receive, request._send)
 
+async def server_card_handler(request):
+    return JSONResponse({"serverInfo": {"name": "x402-auditor", "version": "1.0.0"}, "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]})
+
 mcp_app = Starlette(routes=[
     Route("/sse", endpoint=handle_sse, methods=["GET"]),
-    Route("/messages/", endpoint=handle_messages, methods=["POST"])
+    Route("/messages/", endpoint=handle_messages, methods=["POST"]),
+    Route("/.well-known/mcp/server-card.json", endpoint=server_card_handler, methods=["GET"])
 ])
 
 app.mount("/", mcp_app)
