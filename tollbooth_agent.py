@@ -114,6 +114,21 @@ async def list_tools_handler(ctx, params, **kwargs) -> list[types.Tool]:
                     "payment_hash": {"type": "string"}
                 },
                 "required": ["contract_address"]
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "vulnerabilities": {"type": "array", "items": {"type": "string"}},
+                    "score": {"type": "number"},
+                    "error": {"type": "string"}
+                }
+            },
+            annotations={
+                "title": "Live Contract Auditor",
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True
             }
         )
     ]
@@ -208,6 +223,21 @@ async def handle_sse(request):
                                     "user_wallet": {"type": "string", "description": "The wallet address making the request"}
                                 },
                                 "required": ["contract_address", "user_wallet"]
+                            },
+                            "outputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "vulnerabilities": {"type": "array", "items": {"type": "string"}},
+                                    "score": {"type": "number"},
+                                    "error": {"type": "string"}
+                                }
+                            },
+                            "annotations": {
+                                "title": "Live Contract Auditor",
+                                "readOnlyHint": True,
+                                "destructiveHint": False,
+                                "idempotentHint": True,
+                                "openWorldHint": True
                             }
                         }]
                     }

@@ -18,3 +18,5 @@ configSchema:
       title: Client ID
       description: "Enter any identifier (e.g., 'user1') to connect."
 description: "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."
+description: Live Smart Contract AI Auditor for the x402 protocol.
+homepage: https://github.com/ak10082247-max/x402-agent-tollbooth
