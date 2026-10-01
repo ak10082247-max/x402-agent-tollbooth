@@ -98,6 +98,13 @@ async def get_llms():
 async def get_robots():
     return "User-agent: *\nAllow: /\nSitemap: https://x402-agent-tollbooth.onrender.com/sitemap.xml"
 
+@app.get("/.well-known/mcp/server-card.json")
+async def get_server_card():
+    return JSONResponse(content={
+        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"},
+        "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
+    })
+
 @app.get("/sitemap.xml")
 async def get_sitemap():
     xml = '''<?xml version="1.0" encoding="UTF-8"?>
