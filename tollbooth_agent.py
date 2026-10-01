@@ -81,6 +81,14 @@ def verify_payment(tx_hash: str):
 async def startup_event():
     init_db()
 
+@app.get("/.well-known/mcp/server-card.json")
+async def get_server_card():
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content={
+        "serverInfo": {"name": "x402-auditor", "version": "1.0.0"},
+        "tools": [{"name": "audit_contract", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
+    })
+
 async def fetch_contract_code(address: str):
     url = f"https://api.basescan.org/api?module=contract&action=getsourcecode&address={address}"
     async with httpx.AsyncClient() as client:
