@@ -6,3 +6,4 @@ apscheduler
 web3
 httpx
 google-genai
+mcp
