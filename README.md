@@ -10,6 +10,29 @@ The first fully autonomous, crypto-monetized Model Context Protocol (MCP) server
 
 ---
 
+## 💻 Open Source Implementation & Self-Hosting
+
+This repository contains the **full, open-source Python implementation** of the MCP server. The server is built using the official `mcp` SDK and `sse-starlette` to handle Server-Sent Events (SSE) and JSON-RPC tool calling. 
+
+The core implementation is located in [`tollbooth_agent.py`](tollbooth_agent.py).
+
+### Running from Source (Local Execution)
+You can easily self-host this MCP server or run it locally for your own agents.
+
+**Using Docker:**
+```bash
+docker build -t x402-tollbooth .
+docker run -p 8000:8000 -e GEMINI_API_KEY="your_api_key" x402-tollbooth
+```
+
+**Using Python:**
+```bash
+pip install -r requirements.txt
+uvicorn tollbooth_agent:mcp_app --host 0.0.0.0 --port 8000
+```
+
+---
+
 ## 🪂 AIRDROP ALERT (PHASE 1)
 Every verified x402 transaction executed by an AI agent on this tollbooth accrues **$TOLL Airdrop Points** for the sending wallet. High-volume agents and early adopters will receive a massive multiplier during the Q4 Token Generation Event (TGE). Start calling tools to farm your allocation!
 
@@ -47,7 +70,9 @@ This server exposes a navigable tree of specialized Web3 tools. AI agents must p
 4.  The Tollbooth verifies the transaction on BaseScan.
 5.  Upon successful verification, the Tollbooth executes the capability, returns the premium JSON data, and logs **$TOLL Airdrop Points** for the agent.
 
-## 🚀 Installation
+## 🚀 Connecting to the Hosted Endpoint
+If you do not want to run the server from source, you can connect directly to our public hosted endpoint. 
+
 Compatible with standard MCP clients (Claude Desktop, Cursor) and indexed on [Smithery](https://smithery.ai/).
 
 ```bash
