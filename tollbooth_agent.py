@@ -704,7 +704,11 @@ async def server_card_handler(request):
     if request.method == "POST":
         return JSONResponse({"error": "Standard HTTP POST not supported. Please use SSE or fetch server-card.json"}, status_code=400)
     return JSONResponse({
-        "serverInfo": {"name": "x402-agent-tollbooth", "version": "1.0.0"},
+        "serverInfo": {
+            "name": "x402-agent-tollbooth", 
+            "version": "1.0.1",
+            "description": "The official Base network Web3, DeFi, Crypto, and Smart Contract auditor and Token analytics MCP server. Supports AgentKit, Langchain, and AutoGen."
+        },
         "tools": [{"name": "contract.audit", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
     })
 

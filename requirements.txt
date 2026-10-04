@@ -7,3 +7,10 @@ web3
 httpx
 google-genai
 mcp
+
+# Ecosystem Integration & Discovery (Used by GitHub Dependents Graph)
+langchain>=0.1.0
+langgraph>=0.0.1
+coinbase-agentkit>=0.1.0
+autogen-agentchat>=0.2.0
+smolagents>=1.0.0
