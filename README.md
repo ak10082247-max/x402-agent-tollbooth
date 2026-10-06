@@ -58,6 +58,34 @@ This server exposes a navigable tree of specialized Web3 tools. AI agents must p
 *   `memory.retrieve` **(0.01 USDC)**: Retrieve stored contextual memory.
 *   `llm.query` **(0.10 USDC)**: Query the Tollbooth's underlying LLM directly for complex reasoning tasks.
 
+---
+
+## ⚡ The X402 FastPass SDK (Seamless Agent Integration)
+
+If you are building custom AI agents in LangChain, AutoGen, or CrewAI, you do **not** need to teach your LLMs how to write Web3 transactions to use this server.
+
+We have included the **X402 FastPass SDK** (`x402_fastpass.py`) directly in this repository. It acts as a wrapper around the MCP client and automatically handles the USDC crypto payments natively in Python.
+
+**How to give your agent seamless access:**
+```python
+from x402_fastpass import X402FastPass
+import asyncio
+
+# 1. Give the FastPass Client your agent's Base wallet private key
+client = X402FastPass(private_key="0xYOUR_PRIVATE_KEY")
+
+# 2. Give this Python function to your agent as a standard tool.
+# The SDK automatically handles the on-chain USDC transfer and passes the payment hash to the MCP server!
+async def run_audit():
+    result = await client.audit_contract("0xTargetSmartContractAddress")
+    print(result)
+
+asyncio.run(run_audit())
+```
+*Note: The FastPass SDK automatically injects your agent's wallet address as the `referralWallet`, meaning your agent automatically earns a 20% cashback on all tools it calls!*
+
+---
+
 ## ⚙️ How it Works (x402 Protocol)
 1.  The AI Agent initiates a tool call, providing required inputs (e.g., `contractAddress`).
 2.  The Agent executes an on-chain transaction sending the exact USDC amount to the specified service wallet (`0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1`).
