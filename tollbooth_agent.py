@@ -3,6 +3,10 @@ import json
 import sqlite3
 import uvicorn
 import httpx
+import sys
+sys.path.append(os.getcwd())
+from legit_data_marketplace.data_marketplace_plugin import DataMarketplace
+plugin = DataMarketplace()
 from google import genai
 from typing import Optional
 from fastapi import FastAPI, Request
@@ -16,8 +20,11 @@ from starlette.routing import Route
 from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+import dotenv
+dotenv.load_dotenv('.env.empire')
+
 USDC_contractAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+WALLET_ADDRESS = os.environ.get("BASE_USDC_WALLET") or "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
 EXPECTED_AMOUNT = 1000000  # 1.00 USDC, 6 decimals
 TRANSFER_EVENT_SIGNATURE = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
@@ -106,6 +113,30 @@ async def fetch_contract_code(address: str):
 
 async def list_tools_handler(ctx, params, **kwargs) -> types.ListToolsResult:
     return types.ListToolsResult(tools=[
+        types.Tool(
+            name="arbitrage.company_enrich",
+            description="Returns structured company data. Requires 0.50 USDC.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string"},
+                    "paymentHash": {"type": "string"}
+                },
+                "required": ["domain"]
+            }
+        ),
+        types.Tool(
+            name="arbitrage.news_aggregate",
+            description="Returns recent news headlines. Requires 0.10 USDC.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string"},
+                    "paymentHash": {"type": "string"}
+                },
+                "required": ["topic"]
+            }
+        ),
         types.Tool(
             name="contract.audit",
             description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
@@ -309,10 +340,19 @@ async def call_tool_handler(ctx, params, **kwargs) -> types.CallToolResult:
     name = params.name
     arguments = params.arguments
 
-    if name not in ["contract.audit", "contract.patch", "llm.query", "wallet.profile", "memory.store", "memory.retrieve", "contract.auditTeaser", "market.alpha", "token.analyze"]:
+    if name not in ["contract.audit", "contract.patch", "llm.query", "wallet.profile", "memory.store", "memory.retrieve", "contract.auditTeaser", "market.alpha", "token.analyze", "arbitrage.company_enrich", "arbitrage.news_aggregate"]:
         raise ValueError(f"Unknown tool: {name}")
 
     receipt_hash = arguments.get("paymentHash")
+
+    if name == "arbitrage.company_enrich":
+        required_amount = 500000
+        formatted_amount = "0.50"
+        service_name = "Company Data Enrichment"
+    elif name == "arbitrage.news_aggregate":
+        required_amount = 100000
+        formatted_amount = "0.10"
+        service_name = "News Aggregation"
 
     if name == "contract.patch":
         required_amount = 5000000
@@ -379,6 +419,13 @@ async def call_tool_handler(ctx, params, **kwargs) -> types.CallToolResult:
                 "upsell": "This is a free teaser. To view the exact lines of code and patching instructions, call 'contract.audit' with a 1.00 USDC payment."
             }))])
             
+        elif name == "arbitrage.company_enrich":
+            result = plugin.company_enrich(arguments.get("domain"))
+            return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(result))])
+            
+        elif name == "arbitrage.news_aggregate":
+            result = plugin.news_aggregate(arguments.get("topic"))
+            return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(result))])
         elif name == "market.alpha":
             import json
             conn = sqlite3.connect('payments.db')

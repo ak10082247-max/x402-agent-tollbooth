@@ -63,5 +63,26 @@ def main():
         
     print(f"Report published to {filename}")
 
+    # Generate an RSS Feed snippet or full XML feed
+    feed_path = "docs/feed.xml"
+    if not os.path.exists(feed_path):
+        rss_content = f"""<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+<channel>
+<title>Daily Base Audits</title>
+<link>https://ak10082247-max.github.io/x402-agent-tollbooth/</link>
+<description>Autonomous AI Security Audits on Base</description>
+<item>
+    <title>Daily Base Network AI Audit - {today}</title>
+    <link>https://ak10082247-max.github.io/x402-agent-tollbooth/</link>
+    <pubDate>{datetime.datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0000")}</pubDate>
+</item>
+</channel>
+</rss>
+"""
+        with open(feed_path, "w", encoding="utf-8") as f:
+            f.write(rss_content)
+        print("RSS feed generated!")
+
 if __name__ == '__main__':
     main()
