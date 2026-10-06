@@ -13,7 +13,7 @@ categories: audit base
 
 ### 1. BASE (BASE)
 - **Contract Address:** `0xd07379a755A8f11B57610154861D694b2A0f615a`
-- **Current Price:** $0.0000007249
+- **Current Price:** $0.0000007245
 - **AI Audit Summary:** *(Simulated tool call to `contract.auditTeaser`)* 0 critical vulnerabilities found. Liquidity is locked. 2 medium warnings regarding owner privileges.
 
 *To view the full deep-dive audit for BASE, connect your agent to `x402-agent-tollbooth` and run `contract.audit`.*
