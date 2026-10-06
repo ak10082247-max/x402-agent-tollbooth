@@ -84,5 +84,27 @@ def main():
             f.write(rss_content)
         print("RSS feed generated!")
 
+    # Ping RSS aggregators to broadcast the update
+    ping_aggregators("Daily Base Audits", "https://ak10082247-max.github.io/x402-agent-tollbooth/")
+
+def ping_aggregators(title, url):
+    print("Pinging aggregators...")
+    try:
+        # Pingomatic XML-RPC
+        xml_payload = f'''<?xml version="1.0"?>
+        <methodCall>
+            <methodName>weblogUpdates.ping</methodName>
+            <params>
+                <param><value>{title}</value></param>
+                <param><value>{url}</value></param>
+            </params>
+        </methodCall>'''
+        headers = {'Content-Type': 'text/xml'}
+        response = requests.post("http://rpc.pingomatic.com/", data=xml_payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            print("Successfully pinged Ping-O-Matic (broadcasts to Weblogs, FeedBurner, etc.)")
+    except Exception as e:
+        print(f"Failed to ping aggregators: {e}")
+
 if __name__ == '__main__':
     main()
