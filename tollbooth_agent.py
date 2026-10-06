@@ -343,15 +343,60 @@ class WebAuditRequest(BaseModel):
     paymentHash: str
     isPatch: bool = False
 
+import base64
+from starlette.requests import Request
+
 @app.post("/api/audit")
-async def web_audit(req: WebAuditRequest):
-    required_amount = 5000000 if req.isPatch else 1000000
+async def web_audit(request: Request):
+    # Support both traditional web3 dapp and x402 machine protocol
+    try:
+        body = await request.json()
+    except:
+        body = {}
+        
+    payment_signature = request.headers.get("PAYMENT-SIGNATURE")
     
-    status = verify_payment(req.paymentHash, required_amount)
+    # If no payment signature and no manual payment hash from dapp, return 402 challenge
+    if not payment_signature and not body.get("paymentHash"):
+        # x402 Protocol Challenge
+        requirements = [{
+            "network": "base",
+            "asset": "USDC",
+            "price": "1.00",
+            "address": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+        }]
+        req_b64 = base64.b64encode(json.dumps(requirements).encode()).decode()
+        return JSONResponse(
+            {"error": "Payment required"}, 
+            status_code=402, 
+            headers={"PAYMENT-REQUIRED": req_b64}
+        )
+        
+    contract_address = body.get("contractAddress")
+    if not contract_address:
+        return JSONResponse({"error": "Missing contractAddress"}, status_code=400)
+        
+    is_patch = body.get("isPatch", False)
+    required_amount = 5000000 if is_patch else 1000000
+    
+    # Handle payment hash from dapp
+    payment_hash = body.get("paymentHash")
+    if not payment_hash and payment_signature:
+        # In a full x402 implementation, the signature contains the tx hash
+        try:
+            sig_data = json.loads(base64.b64decode(payment_signature).decode())
+            payment_hash = sig_data.get("transactionHash")
+        except:
+            pass
+            
+    if not payment_hash:
+        return JSONResponse({"error": "Missing payment signature or hash"}, status_code=400)
+        
+    status = verify_payment(payment_hash, required_amount)
     if status == "ALREADY_REDEEMED":
         return JSONResponse({"error": "Transaction hash already redeemed"}, status_code=400)
     elif status == True:
-        result = await process_contract_audit(req.contractAddress, req.isPatch)
+        result = await process_contract_audit(contract_address, is_patch)
         return JSONResponse(result)
     else:
         return JSONResponse({"error": "Payment verification failed"}, status_code=400)
