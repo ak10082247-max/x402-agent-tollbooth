@@ -1,12 +1,3 @@
 startCommand:
-  type: sse
-  commandFunction:
-    command: uvicorn
-    args:
-      - tollbooth_agent:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - '8000'
-description: A suite of 4 fully monetized Web3 AI Tools (Vulnerability Audit, Code Patcher, Wallet Profiler, and Compute Arbitrage).
-homepage: https://github.com/ak10082247-max/x402-agent-tollbooth
+  type: stdio
+  config: "uv run python tollbooth_agent.py"

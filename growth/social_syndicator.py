@@ -47,6 +47,31 @@ def post_to_twitter(title, link, api_key, api_secret, access_token, access_token
     except Exception as e:
         print(f"Twitter syndication failed: {e}")
 
+def post_to_dev_to(title, link, api_key):
+    if not api_key:
+        return
+    
+    payload = {
+        "article": {
+            "title": f"Security Audit: {title}",
+            "published": True,
+            "body_markdown": f"🚨 **New Autonomous Audit Published!** 🚨\n\nOur MCP AI Agent just audited a trending Base network token.\n\nRead the full report (and connect your own agent to our Tollbooth MCP) here:\n{link}\n\n#web3 #ai #security #base",
+            "tags": ["web3", "ai", "security", "base"]
+        }
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "api-key": api_key
+    }
+    try:
+        response = requests.post("https://dev.to/api/articles", json=payload, headers=headers)
+        if response.status_code == 201:
+            print("Successfully syndicated to Dev.to.")
+        else:
+            print(f"Dev.to syndication failed: {response.text}")
+    except Exception as e:
+        print(f"Dev.to syndication failed: {e}")
+
 def main():
     print("Running Social Syndicator...")
     title, link = get_latest_post()
@@ -55,6 +80,7 @@ def main():
         return
 
     discord_webhook = os.getenv("DISCORD_WEBHOOK_URL")
+    dev_to_key = os.getenv("DEV_TO_API_KEY")
     tw_api_key = os.getenv("TWITTER_API_KEY")
     tw_api_secret = os.getenv("TWITTER_API_SECRET")
     tw_access_token = os.getenv("TWITTER_ACCESS_TOKEN")
@@ -64,6 +90,11 @@ def main():
         post_to_discord(title, link, discord_webhook)
     else:
         print("No DISCORD_WEBHOOK_URL found. Skipping Discord syndication.")
+        
+    if dev_to_key:
+        post_to_dev_to(title, link, dev_to_key)
+    else:
+        print("No DEV_TO_API_KEY found. Skipping Dev.to syndication.")
         
     if all([tw_api_key, tw_api_secret, tw_access_token, tw_access_secret]):
         post_to_twitter(title, link, tw_api_key, tw_api_secret, tw_access_token, tw_access_secret)
