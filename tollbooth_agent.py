@@ -366,10 +366,12 @@ async def web_audit(request: Request):
                 "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
                 "extra": {
                     "name": "USD Coin",
-                    "version": "2"
+                    "version": "2",
+                    "chainId": 8453
                 },
                 "amount": "1000000",
                 "maxAmountRequired": "1000000",
+                "maxTimeoutSeconds": 300,
                 "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
             }]
         }
@@ -399,10 +401,12 @@ async def web_audit(request: Request):
                 "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
                 "extra": {
                     "name": "USD Coin",
-                    "version": "2"
+                    "version": "2",
+                    "chainId": 8453
                 },
                 "amount": "1000000",
                 "maxAmountRequired": "1000000",
+                "maxTimeoutSeconds": 300,
                 "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
             }]
         }
