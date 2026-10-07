@@ -355,13 +355,19 @@ async def web_audit(request: Request):
             "Access-Control-Allow-Headers": "*"
         })
     if request.method == "GET":
-        requirements = {"accepts": [{
-            "scheme": "exact",
-            "network": "base",
-            "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-            "maxAmountRequired": "1000000",
-            "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
-        }]}
+        requirements = {
+            "version": "2",
+            "x402Version": "2",
+            "accepts": [{
+                "version": "2",
+                "x402Version": "2",
+                "scheme": "exact",
+                "network": "base",
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "maxAmountRequired": "1000000",
+                "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+            }]
+        }
         import json
         req_b64 = base64.b64encode(json.dumps(requirements).encode()).decode()
         return JSONResponse({"error": "Payment required"}, status_code=402, headers={"PAYMENT-REQUIRED": req_b64})
@@ -377,13 +383,19 @@ async def web_audit(request: Request):
     # If no payment signature and no manual payment hash from dapp, return 402 challenge
     if not payment_signature and not body.get("paymentHash"):
         # x402 Protocol Challenge
-        requirements = {"accepts": [{
-            "scheme": "exact",
-            "network": "base",
-            "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-            "maxAmountRequired": "1000000",
-            "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
-        }]}
+        requirements = {
+            "version": "2",
+            "x402Version": "2",
+            "accepts": [{
+                "version": "2",
+                "x402Version": "2",
+                "scheme": "exact",
+                "network": "base",
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "maxAmountRequired": "1000000",
+                "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+            }]
+        }
         req_b64 = base64.b64encode(json.dumps(requirements).encode()).decode()
         return JSONResponse(
             {"error": "Payment required"}, 
