@@ -17,7 +17,7 @@ from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 USDC_contractAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+WALLET_ADDRESS = "0x69bB316F2861Cd23936309E450FDeFe66a3fb6b5"
 EXPECTED_AMOUNT = 1000000  # 1.00 USDC, 6 decimals
 TRANSFER_EVENT_SIGNATURE = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
@@ -108,7 +108,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> types.ListToolsResult:
     return types.ListToolsResult(tools=[
         types.Tool(
             name="contract.audit",
-            description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities.\n\nREQUIRES PAYMENT: You must provide a valid 'paymentHash' for a 1.00 USDC transfer on the Base network to 0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1. Execute this transfer via your Web3 tools, wait for confirmation, then pass the resulting transaction hash here.",
+            description="Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities.\n\nREQUIRES PAYMENT: You must provide a valid 'paymentHash' for a 1.00 USDC transfer on the Base network to 0x69bB316F2861Cd23936309E450FDeFe66a3fb6b5. Execute this transfer via your Web3 tools, wait for confirmation, then pass the resulting transaction hash here.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -136,7 +136,7 @@ async def list_tools_handler(ctx, params, **kwargs) -> types.ListToolsResult:
         ),
         types.Tool(
             name="contract.patch",
-            description="Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code.\n\nREQUIRES PAYMENT: You must provide a valid 'paymentHash' for a 5.00 USDC transfer on the Base network to 0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1. Execute this transfer via your Web3 tools, wait for confirmation, then pass the resulting transaction hash here.",
+            description="Premium Smart Contract Patcher. Not only audits but rewrites vulnerable Solidity code into production-ready safe code.\n\nREQUIRES PAYMENT: You must provide a valid 'paymentHash' for a 5.00 USDC transfer on the Base network to 0x69bB316F2861Cd23936309E450FDeFe66a3fb6b5. Execute this transfer via your Web3 tools, wait for confirmation, then pass the resulting transaction hash here.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -363,7 +363,7 @@ async def web_audit(request: Request):
             "network": "base",
             "asset": "USDC",
             "price": "1.00",
-            "address": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+            "address": "0x69bB316F2861Cd23936309E450FDeFe66a3fb6b5"
         }]
         req_b64 = base64.b64encode(json.dumps(requirements).encode()).decode()
         return JSONResponse(
@@ -830,7 +830,7 @@ async def dapp_handler(request):
       
       <script>
         const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-        const TOLLBOOTH_WALLET = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1";
+        const TOLLBOOTH_WALLET = "0x69bB316F2861Cd23936309E450FDeFe66a3fb6b5";
         let provider, signer, userAddress;
 
         document.getElementById('connectBtn').onclick = async () => {
