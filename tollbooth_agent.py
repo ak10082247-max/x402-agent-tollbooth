@@ -368,6 +368,7 @@ async def web_audit(request: Request):
                     "name": "USD Coin",
                     "version": "2"
                 },
+                "amount": "1000000",
                 "maxAmountRequired": "1000000",
                 "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
             }]
@@ -400,6 +401,7 @@ async def web_audit(request: Request):
                     "name": "USD Coin",
                     "version": "2"
                 },
+                "amount": "1000000",
                 "maxAmountRequired": "1000000",
                 "payTo": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
             }]
