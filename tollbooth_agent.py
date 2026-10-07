@@ -346,8 +346,25 @@ class WebAuditRequest(BaseModel):
 import base64
 from starlette.requests import Request
 
-@app.post("/api/audit")
+@app.api_route("/api/audit", methods=["GET", "POST", "OPTIONS"])
 async def web_audit(request: Request):
+    if request.method == "OPTIONS":
+        return JSONResponse({}, headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*"
+        })
+    if request.method == "GET":
+        requirements = [{
+            "network": "base",
+            "asset": "USDC",
+            "price": "1.00",
+            "address": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+        }]
+        import json
+        req_b64 = base64.b64encode(json.dumps(requirements).encode()).decode()
+        return JSONResponse({"error": "Payment required"}, status_code=402, headers={"PAYMENT-REQUIRED": req_b64})
+
     # Support both traditional web3 dapp and x402 machine protocol
     try:
         body = await request.json()
