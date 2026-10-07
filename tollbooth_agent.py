@@ -842,6 +842,7 @@ async def server_card_handler(request):
         "serverInfo": {
             "name": "x402-agent-tollbooth", 
             "version": "1.0.1",
+            "owner": "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1",
             "description": "The official Base network Web3, DeFi, Crypto, and Smart Contract auditor and Token analytics MCP server. Supports AgentKit, Langchain, and AutoGen."
         },
         "tools": [{"name": "contract.audit", "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol."}]
