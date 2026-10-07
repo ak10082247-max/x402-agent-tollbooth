@@ -356,11 +356,11 @@ async def web_audit(request: Request):
         })
     if request.method == "GET":
         requirements = {
-            "version": "1",
-            "x402Version": "1",
+            "version": 2,
+            "x402Version": 2,
             "accepts": [{
-                "version": "1",
-                "x402Version": "1",
+                "version": 2,
+                "x402Version": 2,
                 "scheme": "exact",
                 "network": "base",
                 "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -384,11 +384,11 @@ async def web_audit(request: Request):
     if not payment_signature and not body.get("paymentHash"):
         # x402 Protocol Challenge
         requirements = {
-            "version": "1",
-            "x402Version": "1",
+            "version": 2,
+            "x402Version": 2,
             "accepts": [{
-                "version": "1",
-                "x402Version": "1",
+                "version": 2,
+                "x402Version": 2,
                 "scheme": "exact",
                 "network": "base",
                 "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
