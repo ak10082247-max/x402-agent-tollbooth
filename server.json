@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ak10082247-max/x402-agent-tollbooth",
+  "title": "x402 Agent Tollbooth",
+  "description": "On-chain DeFi smart contract auditor, arbitrage scanner, and agent tollbooth via x402 on Base.",
+  "version": "2.1.0",
+  "websiteUrl": "https://x402-agent-tollbooth.onrender.com",
+  "repository": {
+    "url": "https://github.com/ak10082247-max/x402-agent-tollbooth",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://x402-agent-tollbooth.onrender.com/mcp"
+    }
+  ]
+}
