@@ -31,7 +31,7 @@ except ImportError:
 logger = logging.getLogger("tollbooth.agent")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-from delivery_recorder import record_delivery, get_recent_deliveries
+from delivery_recorder import record_delivery, get_recent_deliveries, get_paid_deliveries
 
 AGENT_CONTINUATION = {
     "chain_execution": "autonomous_agent_flow_v2",
@@ -760,9 +760,12 @@ async def stats():
 @app.get("/v1/telemetry/deliveries", include_in_schema=False)
 async def telemetry_deliveries():
     deliveries = get_recent_deliveries()
+    paid = get_paid_deliveries()
     return JSONResponse({
         "status": "ok",
         "service": "x402-agent-tollbooth",
+        "paid_count": len(paid),
+        "paid_deliveries": paid,
         "count": len(deliveries),
         "deliveries": deliveries
     }, headers=CORS_HEADERS)
