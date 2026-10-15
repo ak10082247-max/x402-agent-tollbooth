@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 8000
 
 # Run the MCP server
-CMD ["uvicorn", "tollbooth_agent:mcp_app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "tollbooth_agent:app", "--host", "0.0.0.0", "--port", "8000"]

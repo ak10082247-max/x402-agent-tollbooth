@@ -1118,6 +1118,9 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+# Expose mcp_app alias so any legacy uvicorn command (e.g. Dockerfile / Render startCommand) runs smoothly
+mcp_app = app
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("tollbooth_agent:app", host="0.0.0.0", port=port)
