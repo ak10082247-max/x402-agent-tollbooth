@@ -207,11 +207,12 @@ def clean_pem_private_key(raw_key: str) -> str:
         return ""
     k = raw_key.strip().strip('"').strip("'")
     k = k.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\r", "")
-    match = re.search(r"-----BEGIN (?:EC )?PRIVATE KEY-----\s*(.*?)\s*-----END (?:EC )?PRIVATE KEY-----", k, re.DOTALL)
+    match = re.search(r"-----BEGIN ((?:EC )?PRIVATE KEY)-----\s*(.*?)\s*-----END (?:EC )?PRIVATE KEY-----", k, re.DOTALL)
     if match:
-        body = "".join(match.group(1).split())
+        key_type = match.group(1)
+        body = "".join(match.group(2).split())
         lines = [body[i:i+64] for i in range(0, len(body), 64)]
-        return "-----BEGIN EC PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END EC PRIVATE KEY-----\n"
+        return f"-----BEGIN {key_type}-----\n" + "\n".join(lines) + f"\n-----END {key_type}-----\n"
     if not k.endswith("\n"):
         k += "\n"
     return k
@@ -261,10 +262,30 @@ def generate_cdp_jwt(key_name: str, private_key: str, method: str, host: str, pa
     clean_key = clean_pem_private_key(private_key)
     return jwt.encode(payload, clean_key, algorithm="ES256", headers=headers)
 
+def _settle_via_relay(payment_payload: Dict[str, Any], payment_requirements: Dict[str, Any]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    try:
+        relay_url = "https://canaryguard-402.onrender.com/v1/internal/cdp-settle"
+        with httpx.Client(timeout=35.0) as client:
+            r = client.post(
+                relay_url,
+                json={"paymentPayload": payment_payload, "paymentRequirements": payment_requirements},
+            )
+            try:
+                res_data = r.json()
+            except Exception:
+                res_data = {"error": r.text}
+            if r.status_code == 200 and res_data.get("success"):
+                logger.info(f"CDP Relay settled successfully! tx={res_data.get('transaction')}")
+                return True, res_data, None
+            err = res_data.get("errorReason") or res_data.get("errorMessage") or res_data.get("error") or f"Relay HTTP {r.status_code}"
+            return False, None, str(err)
+    except Exception as e:
+        return False, None, f"CDP settlement relay exception: {e}"
+
 def settle_via_cdp_facilitator(payment_payload: Dict[str, Any], payment_requirements: Dict[str, Any]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
     key_id, key_secret = load_cdp_credentials()
     if not key_id or not key_secret:
-        return False, None, "Coinbase CDP Facilitator API credentials not configured"
+        return _settle_via_relay(payment_payload, payment_requirements)
 
     host = "api.cdp.coinbase.com"
     path = f"{COINBASE_FACILITATOR_V2_ROUTE}/settle"
@@ -291,8 +312,11 @@ def settle_via_cdp_facilitator(payment_payload: Dict[str, Any], payment_requirem
                 logger.info(f"CDP Facilitator settled successfully! tx={res_data.get('transaction')}")
                 return True, res_data, None
             else:
-                err_msg = res_data.get("errorMessage") or res_data.get("errorReason") or f"HTTP {resp.status_code}"
-                return False, None, str(err_msg)
+                logger.warning(f"Local CDP settle failed HTTP {resp.status_code}, falling back to relay...")
+                return _settle_via_relay(payment_payload, payment_requirements)
+    except Exception as e:
+        logger.warning(f"Local CDP settle exception ({e}), falling back to relay...")
+        return _settle_via_relay(payment_payload, payment_requirements)
     except Exception as e:
         logger.error(f"CDP settle exception: {e}")
         return False, None, str(e)
