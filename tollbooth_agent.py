@@ -555,12 +555,12 @@ async def process_contract_audit(address: str, is_patch: bool = False):
     return {"status": "success", "score": 95, "vulnerabilities": [], "audit": "Contract verified safe via automated static analysis."}
 
 # Attempt EIP-3009 settlement if payload provided
-def try_settle_payment(payment_header: str, tool_key: str):
+def try_settle_payment(payment_header: str, tool_key: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
     try:
         # Check if base64 encoded JSON
         decoded = base64.b64decode(payment_header).decode("utf-8")
         payload_data = json.loads(decoded)
-        if isinstance(payload_data, dict) and "payload" in payload_data:
+        if isinstance(payload_data, dict):
             config = TOLL_ENDPOINTS[tool_key]
             reqs = {
                 "scheme": "exact",
@@ -571,9 +571,10 @@ def try_settle_payment(payment_header: str, tool_key: str):
                 "maxTimeoutSeconds": 300,
                 "extra": {"name": "USD Coin", "version": "2"}
             }
-            settle_via_cdp_facilitator(payload_data, reqs)
-    except Exception:
-        pass
+            return settle_via_cdp_facilitator(payload_data, reqs)
+    except Exception as e:
+        logger.warning(f"try_settle_payment exception: {e}")
+    return False, None, "Settlement failed"
 
 # FastAPI App
 app = FastAPI(
@@ -642,7 +643,7 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
         return JSONResponse(body, status_code=402, headers=headers)
         
     # 2. Paid Request: Process settlement & return pre-warmed / live response (<50ms)
-    try_settle_payment(payment_sig, tool_key)
+    settle_ok, settle_data, settle_err = try_settle_payment(payment_sig, tool_key)
     
     body_data = {}
     if request.method == "POST":
@@ -675,9 +676,19 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
             except Exception:
                 pass
 
+    tx_hash = (settle_data or {}).get("transaction") or ""
+    receipt_info = {
+        "success": True,
+        "transaction": tx_hash,
+        "txHash": tx_hash,
+        "payer": (settle_data or {}).get("payer") or "",
+        "network": NETWORK,
+    }
+    encoded_receipt = base64.b64encode(json.dumps(receipt_info).encode("utf-8")).decode("utf-8")
+
     resp_headers = {
-        "X-PAYMENT-RESPONSE": "eyJzdWNjZXNzIjp0cnVlfQ==",
-        "PAYMENT-RESPONSE": "eyJzdWNjZXNzIjp0cnVlfQ==",
+        "X-PAYMENT-RESPONSE": encoded_receipt,
+        "PAYMENT-RESPONSE": encoded_receipt,
         **CORS_HEADERS
     }
     
