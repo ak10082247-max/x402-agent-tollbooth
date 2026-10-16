@@ -11,8 +11,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Expose the port Uvicorn will run on
-EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
+ENV PORT=10000
 
-# Run the MCP server
-CMD ["uvicorn", "tollbooth_agent:app", "--host", "0.0.0.0", "--port", "8000"]
+# Expose the port
+EXPOSE 10000
+
+# Run with dynamic $PORT support
+CMD ["sh", "-c", "uvicorn tollbooth_agent:app --host 0.0.0.0 --port ${PORT:-10000}"]
