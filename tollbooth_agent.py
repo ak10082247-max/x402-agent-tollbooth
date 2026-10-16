@@ -172,10 +172,10 @@ TOLL_ENDPOINTS: Dict[str, Dict[str, Any]] = {
         "path": "/api/audit",
         "name": "contract_audit",
         "title": "Live Smart Contract AI Auditor",
-        "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Requires 1.00 USDC payment via x402 protocol.",
+        "description": "Live Smart Contract AI Auditor. Analyzes Base contracts for vulnerabilities. Cost: 0.02 USDC via x402 protocol.",
         "category": "security",
-        "price_usd": "1.00",
-        "amount_microunits": "1000000",
+        "price_usd": "0.02",
+        "amount_microunits": "20000",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -557,23 +557,66 @@ async def process_contract_audit(address: str, is_patch: bool = False):
 # Attempt EIP-3009 settlement if payload provided
 def try_settle_payment(payment_header: str, tool_key: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
     try:
-        # Check if base64 encoded JSON
-        decoded = base64.b64decode(payment_header).decode("utf-8")
-        payload_data = json.loads(decoded)
+        payload_str = payment_header.strip()
+        if not payload_str.startswith("{"):
+            try:
+                payload_str = base64.b64decode(payload_str).decode("utf-8")
+            except Exception:
+                pass
+        payload_data = json.loads(payload_str)
         if isinstance(payload_data, dict):
             config = TOLL_ENDPOINTS[tool_key]
             reqs = {
                 "scheme": "exact",
                 "network": NETWORK,
-                "amount": config["amount_microunits"],
+                "amount": str(config["amount_microunits"]),
                 "asset": ASSET,
                 "payTo": WALLET_ADDRESS,
                 "maxTimeoutSeconds": 300,
                 "extra": {"name": "USD Coin", "version": "2"}
             }
-            return settle_via_cdp_facilitator(payload_data, reqs)
+            auth = (
+                payload_data.get("payload", {}).get("authorization")
+                or payload_data.get("authorization")
+                or payload_data.get("message")
+                or payload_data
+            )
+            sig = (
+                payload_data.get("payload", {}).get("signature")
+                or payload_data.get("signature")
+                or ""
+            )
+            from_addr = auth.get("from") or auth.get("payer") or ""
+            nonce = auth.get("nonce") or ""
+            if isinstance(nonce, bytes):
+                nonce = "0x" + nonce.hex()
+            elif isinstance(nonce, str) and not nonce.startswith("0x") and len(nonce) > 0:
+                nonce = "0x" + nonce
+
+            v2_payload = {
+                "x402Version": payload_data.get("x402Version", 2),
+                "resource": payload_data.get("resource") or {
+                    "url": f"https://x402-agent-tollbooth.onrender.com{config['path']}",
+                    "description": config.get("description", ""),
+                    "mimeType": "application/json"
+                },
+                "accepted": payload_data.get("accepted") or reqs,
+                "payload": {
+                    "signature": sig,
+                    "authorization": {
+                        "from": from_addr,
+                        "to": WALLET_ADDRESS,
+                        "value": str(auth.get("value") or auth.get("amount") or config["amount_microunits"]),
+                        "validAfter": str(auth.get("validAfter", 0)),
+                        "validBefore": str(auth.get("validBefore", int(time.time()) + 3600)),
+                        "nonce": nonce,
+                    }
+                }
+            }
+            return settle_via_cdp_facilitator(v2_payload, reqs)
     except Exception as e:
         logger.warning(f"try_settle_payment exception: {e}")
+        return False, None, f"Settlement parsing exception: {e}"
     return False, None, "Settlement failed"
 
 # FastAPI App
@@ -652,6 +695,29 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
         except Exception:
             body_data = {}
     query_params = dict(request.query_params)
+    
+    if not settle_ok or not settle_data:
+        cached = CHALLENGE_CACHE.get(tool_key)
+        headers = cached["headers"] if cached else build_toll_challenge(tool_key)[0]
+        err_body = {
+            "error": "Payment settlement failed",
+            "details": settle_err or "Settlement rejected by facilitator",
+            "service": "x402-agent-tollbooth",
+            "endpoint": request.url.path
+        }
+        record_delivery(
+            endpoint=request.url.path,
+            method=request.method,
+            status_code=402,
+            latency_ms=(time.time() - start_time) * 1000,
+            user_agent=user_agent,
+            client_ip=client_ip,
+            referer=referer,
+            request_input=body_data if request.method == "POST" else query_params,
+            raw_payment_header=payment_sig,
+            response_preview=json.dumps(err_body)[:300]
+        )
+        return JSONResponse(err_body, status_code=402, headers=headers)
     
     config = TOLL_ENDPOINTS[tool_key]
     response_data = dict(config["default_response"])
