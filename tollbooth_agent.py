@@ -588,27 +588,35 @@ def try_settle_payment(payment_header: str, tool_key: str) -> Tuple[bool, Option
             if incoming_net.startswith("solana") or tx_b64:
                 if not tx_b64:
                     return False, None, "Missing Solana serialized transaction in payload.transaction"
+                inc_amt_raw = str((payload_data.get("accepted") or {}).get("amount") or config["amount_microunits"])
+                try:
+                    req_amt = inc_amt_raw if int(inc_amt_raw) >= int(config["amount_microunits"]) else str(config["amount_microunits"])
+                except Exception:
+                    req_amt = str(config["amount_microunits"])
                 solana_req = {
                     "scheme": "exact",
                     "network": SOLANA_NETWORK,
-                    "amount": str(config["amount_microunits"]),
+                    "amount": req_amt,
                     "asset": SOLANA_USDC_MINT,
                     "payTo": SOLANA_WALLET_ADDRESS,
                     "maxTimeoutSeconds": 300,
                     "extra": {"name": "USD Coin (Solana)", "version": "2", "feePayer": SOLANA_FEE_PAYER},
                 }
+                payment_payload_obj = {
+                    "x402Version": 2,
+                    "resource": {
+                        "url": f"https://x402-agent-tollbooth.onrender.com{config['path']}",
+                        "description": config.get("description", ""),
+                        "mimeType": "application/json",
+                    },
+                    "accepted": solana_req,
+                    "payload": payload_data.get("payload") or {"transaction": tx_b64},
+                }
+                if payload_data.get("extensions"):
+                    payment_payload_obj["extensions"] = payload_data["extensions"]
                 payai_body = {
                     "x402Version": 2,
-                    "paymentPayload": {
-                        "x402Version": 2,
-                        "resource": {
-                            "url": f"https://x402-agent-tollbooth.onrender.com{config['path']}",
-                            "description": config.get("description", ""),
-                            "mimeType": "application/json",
-                        },
-                        "accepted": solana_req,
-                        "payload": payload_data.get("payload") or {"transaction": tx_b64},
-                    },
+                    "paymentPayload": payment_payload_obj,
                     "paymentRequirements": solana_req,
                 }
                 with httpx.Client(timeout=30.0) as client:
@@ -1269,6 +1277,7 @@ async def tollbooth_live_alerts():
                 "liquidity_usd": 18400000,
                 "teaser_verdict": "50% FREE TEASER: Pool Active ($18.4M Liq) | Insider Cluster Map & Smart-Money Netflow LOCKED",
                 "unlock_url": "https://x402-agent-tollbooth.onrender.com/?token=DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+                "solana_blink_url": "https://dial.to/?action=solana-action:https%3A%2F%2Fx402-agent-tollbooth.onrender.com%2Fapi%2Factions%2Fscan%3Ftoken%3DDezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
                 "price_usdc": "0.010",
                 "timestamp": int(time.time()),
             },
