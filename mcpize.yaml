@@ -1,0 +1,8 @@
+version: "1.0"
+server:
+  name: "x402-Agent-Tollbooth"
+  description: "Enterprise-grade MCP server demonstrating autonomous M2M micro-transactions, cross-DEX arbitrage, and smart routing on Base."
+  transport: "streamable-http"
+  url: "https://x402-agent-tollbooth.onrender.com/mcp"
+  pricing:
+    pro: "$19.99/mo"

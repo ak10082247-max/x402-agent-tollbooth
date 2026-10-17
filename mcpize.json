@@ -1,0 +1,88 @@
+{
+  "$schema": "https://mcpize.com/schemas/v1/mcpize.schema.json",
+  "id": "x402-agent-tollbooth",
+  "name": "x402-Agent-Tollbooth",
+  "title": "x402 Agent Tollbooth - M2M Web3 Intelligence & Cross-DEX Smart Router",
+  "description": "Enterprise-grade MCP server demonstrating autonomous machine-to-machine micro-transactions, cross-DEX arbitrage scanning, smart routing, and vulnerability auditing on Base via x402.",
+  "version": "1.0.0",
+  "author": {
+    "name": "AK Kurox",
+    "email": "ak10082247@gmail.com",
+    "url": "https://github.com/ak10082247-max"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ak10082247-max/x402-agent-tollbooth"
+  },
+  "homepage": "https://x402-agent-tollbooth.onrender.com",
+  "category": "defi",
+  "tags": [
+    "m2m",
+    "x402",
+    "base",
+    "dex-router",
+    "arbitrage",
+    "smart-contracts",
+    "tollbooth",
+    "ai-agents"
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://x402-agent-tollbooth.onrender.com/mcp"
+    }
+  ],
+  "monetization": {
+    "enabled": true,
+    "provider": "stripe",
+    "currency": "usd",
+    "pricing": {
+      "type": "subscription",
+      "tiers": [
+        {
+          "id": "starter",
+          "name": "Starter",
+          "price_usd_per_month": 9.99,
+          "quota_requests_per_month": 3000,
+          "features": [
+            "3,000 monthly toll routing & arbitrage scan requests",
+            "Cross-DEX liquidity spread scanner (Uniswap, Aerodrome, BaseSwap)",
+            "Base smart contract vulnerability teaser audit",
+            "Standard community support"
+          ]
+        },
+        {
+          "id": "pro",
+          "name": "Pro (Recommended)",
+          "price_usd_per_month": 19.99,
+          "quota_requests_per_month": 25000,
+          "is_featured": true,
+          "features": [
+            "25,000 monthly execution requests (<15ms latency)",
+            "Optimal execution gas & slippage smart router",
+            "Real-time token analytics & liquidity scoring",
+            "Full smart contract vulnerability audit & patch suggestions",
+            "99.9% uptime SLA"
+          ]
+        },
+        {
+          "id": "enterprise",
+          "name": "Enterprise",
+          "price_usd_per_month": 49.99,
+          "quota_requests_per_month": 100000,
+          "features": [
+            "100,000 monthly requests + dedicated rate limit allocation",
+            "High-level market alpha & whale contract monitoring",
+            "Persistent agent memory bank integration",
+            "Custom webhook alerts for profitable arbitrage spreads",
+            "Direct developer support"
+          ]
+        }
+      ],
+      "pay_per_call": {
+        "enabled": true,
+        "price_usd": 0.002
+      }
+    }
+  }
+}
