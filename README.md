@@ -7,6 +7,7 @@ This project provides an infrastructure layer allowing AI agents to programmatic
 ![Smithery Quality Score: 100/100](https://img.shields.io/badge/Smithery_Quality-100%2F100-success)
 ![Network](https://img.shields.io/badge/Network-Base-blue)
 ![Currency](https://img.shields.io/badge/Currency-USDC-2775CA)
+[![Glama](https://glama.ai/mcp/servers/ak10082247-max/x402-agent-tollbooth/badges/score.svg)](https://glama.ai/mcp/servers/ak10082247-max/x402-agent-tollbooth)
 
 ---
 
