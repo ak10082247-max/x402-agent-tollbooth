@@ -68,6 +68,7 @@ WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
 SOLANA_NETWORK = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
 SOLANA_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 SOLANA_WALLET_ADDRESS = os.environ.get("SOLANA_MERCHANT_ADDRESS", "3tQ4GthjUMqNsyrb1rZMocMHoNewFQWjDUvHZqWeYuCN")
+SOLANA_USDC_ATA = "3shUSbf9mkGabKqa2pdV7ZrstYvHozwusurLLuugf4dc"
 SOLANA_FEE_PAYER = "CjNFTjvBhbJJd2B5ePPMHRLx1ELZpa8dwQgGL727eKww"
 PAYAI_FACILITATOR_URL = "https://facilitator.payai.network"
 TRANSFER_EVENT_SIGNATURE = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -428,7 +429,7 @@ def build_toll_challenge(tool_key: str) -> Tuple[Dict[str, str], Dict[str, Any]]
                 "price": f"{price_usd} USDC",
                 "maxTimeoutSeconds": 300,
                 "payTo": SOLANA_WALLET_ADDRESS,
-                "extra": {"name": "USD Coin (Solana)", "version": "2", "feePayer": SOLANA_FEE_PAYER},
+                "extra": {"name": "USD Coin (Solana)", "version": "2", "feePayer": SOLANA_FEE_PAYER, "recipientAta": SOLANA_USDC_ATA},
                 "description": desc,
                 "mimeType": "application/json",
             }
@@ -600,7 +601,7 @@ def try_settle_payment(payment_header: str, tool_key: str) -> Tuple[bool, Option
                     "asset": SOLANA_USDC_MINT,
                     "payTo": SOLANA_WALLET_ADDRESS,
                     "maxTimeoutSeconds": 300,
-                    "extra": {"name": "USD Coin (Solana)", "version": "2", "feePayer": SOLANA_FEE_PAYER},
+                    "extra": {"name": "USD Coin (Solana)", "version": "2", "feePayer": SOLANA_FEE_PAYER, "recipientAta": SOLANA_USDC_ATA},
                 }
                 payment_payload_obj = {
                     "x402Version": 2,
@@ -948,17 +949,23 @@ async def well_known_x402():
     return JSONResponse({
         "x402Version": 2,
         "service": "x402-agent-tollbooth",
-        "version": "2.1.0",
+        "version": "2.2.0",
+        "networks": ["eip155:8453", SOLANA_NETWORK],
         "network": "eip155:8453",
+        "solana_network": SOLANA_NETWORK,
         "asset": ASSET,
+        "solana_asset": SOLANA_USDC_MINT,
         "payTo": WALLET_ADDRESS,
+        "solana_pay_to": SOLANA_WALLET_ADDRESS,
+        "solana_recipient_ata": SOLANA_USDC_ATA,
+        "gasless_sponsorship": "100% sponsored ($0 ETH on Base via Coinbase CDP, $0 SOL on Solana via PayAI)",
         "resources": manifest_resources
     }, headers=CORS_HEADERS)
 
 TOLLBOOTH_MCP_TOOLS = [
     {
         "name": v["name"],
-        "description": f"{v['description']} Cost: {v['price_usd']} USDC on Base.",
+        "description": f"{v['description']} Cost: {v['price_usd']} USDC on Base & Solana (100% gasless).",
         "inputSchema": v.get("input_schema", {"type": "object", "properties": {}}),
         "annotations": {
             "readOnlyHint": True,
@@ -1577,6 +1584,7 @@ def custom_openapi():
                 if m.lower() in ("get", "post"):
                     op["security"] = [{"x402Payment": []}]
                     op["x-payment-info"] = {
+                        "networks": ["eip155:8453", SOLANA_NETWORK],
                         "network": "eip155:8453",
                         "chainId": 8453,
                         "asset": ASSET,
@@ -1586,6 +1594,16 @@ def custom_openapi():
                         "payTo": WALLET_ADDRESS,
                         "scheme": "exact",
                         "facilitator": "https://api.cdp.coinbase.com/platform/v2/x402",
+                        "solana": {
+                            "network": SOLANA_NETWORK,
+                            "asset": SOLANA_USDC_MINT,
+                            "amount": tool_cfg.get("amount_microunits", "1000"),
+                            "price": f"{tool_cfg.get('price_usd', '0.001')} USDC",
+                            "payTo": SOLANA_WALLET_ADDRESS,
+                            "recipientAta": SOLANA_USDC_ATA,
+                            "feePayer": SOLANA_FEE_PAYER,
+                            "facilitator": PAYAI_FACILITATOR_URL,
+                        }
                     }
             filtered_paths[path] = methods
     openapi_schema["paths"] = filtered_paths
@@ -1595,7 +1613,7 @@ def custom_openapi():
             "type": "apiKey",
             "name": "PAYMENT-SIGNATURE",
             "in": "header",
-            "description": "x402 micropayment signature header on Base mainnet (EIP-155:8453)",
+            "description": "x402 micropayment signature header on Base mainnet (EIP-155:8453) or Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)",
         }
     }
     app.openapi_schema = openapi_schema
