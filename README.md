@@ -86,18 +86,69 @@ asyncio.run(run_audit())
 
 ---
 
-## ⚙️ How it Works (x402 Protocol)
-1.  The AI Agent initiates a tool call, providing required inputs (e.g., `contractAddress`).
-2.  The Agent executes an on-chain transaction sending the exact USDC amount to the specified service wallet (`0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1`).
-3.  The Agent passes the transaction hash via the `paymentHash` argument.
-4.  The server verifies the transaction on BaseScan.
-5.  Upon successful verification, the server executes the capability and returns the requested JSON payload.
+## ⚙️ How it Works: Modern x402 V2 Header Handshake (100% Gasless)
+
+The server supports the official x402 V2 specification with **100% gasless settlement** on Base Mainnet (`eip155:8453`) and Solana Mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`):
+
+1. **Unpaid Probe**: Agent calls endpoint (e.g. `POST /toll/cross-dex-arbitrage`). Server immediately returns `HTTP 402 Payment Required` with a **50% Free Teaser Preview** and `PAYMENT-REQUIRED` header challenge.
+2. **Auto-Sign (Zero Gas)**: Agent signs an EIP-712 `TransferWithAuthorization` (on Base) or partially-signs an SPL `TransferChecked` (on Solana). The relayer facilitator sponsors all gas fees ($0 ETH / $0 SOL required).
+3. **Replay & Unlock**: Agent attaches Base64 `PAYMENT-SIGNATURE` header. Server verifies via facilitator in <10ms and returns `HTTP 200 OK` with full unredacted intel and `PAYMENT-RESPONSE` cryptographic receipt.
+
+### Autonomous Agent Auto-Pay (Python)
+
+```python
+import base64, json, secrets, time, requests
+from eth_account import Account
+from eth_account.messages import encode_typed_data
+
+def paid_toll_call(endpoint: str, payload: dict, private_key: str):
+    account = Account.from_key(private_key)
+    url = f"https://x402-agent-tollbooth.onrender.com{endpoint}"
+
+    # 1. Probe endpoint
+    res = requests.post(url, json=payload)
+    if res.status_code == 200:
+        return res.json()
+
+    # 2. Decode 402 challenge & sign EIP-712 authorization
+    raw_pr = res.headers.get("PAYMENT-REQUIRED") or res.headers.get("X-Payment-Required")
+    pr_json = json.loads(base64.b64decode(raw_pr).decode("utf-8"))
+    accepted = next(a for a in pr_json["accepts"] if "8453" in str(a.get("network", "")))
+
+    now = int(time.time())
+    nonce = secrets.token_bytes(32)
+    types = {"TransferWithAuthorization": [
+        {"name": "from", "type": "address"}, {"name": "to", "type": "address"},
+        {"name": "value", "type": "uint256"}, {"name": "validAfter", "type": "uint256"},
+        {"name": "validBefore", "type": "uint256"}, {"name": "nonce", "type": "bytes32"},
+    ]}
+    domain = {"name": "USD Coin", "version": "2", "chainId": 8453, "verifyingContract": accepted["asset"]}
+    msg = {"from": account.address, "to": accepted["payTo"], "value": int(accepted["amount"]), "validAfter": 0, "validBefore": now + 300, "nonce": nonce}
+    sig = account.sign_message(encode_typed_data(domain_data=domain, message_types=types, message_data=msg)).signature.hex()
+
+    payment_b64 = base64.b64encode(json.dumps({
+        "x402Version": 2, "resource": pr_json.get("resource"), "accepted": accepted,
+        "payload": {"signature": "0x" + sig.lstrip("0x"), "authorization": {
+            "from": account.address, "to": accepted["payTo"], "value": str(accepted["amount"]),
+            "validAfter": "0", "validBefore": str(now + 300), "nonce": "0x" + nonce.hex()
+        }}
+    }).encode()).decode()
+
+    # 3. Settle & unlock premium response
+    paid_res = requests.post(url, json=payload, headers={"PAYMENT-SIGNATURE": payment_b64})
+    return paid_res.json()
+```
+
+---
 
 ## 🚀 Connecting to the Hosted Endpoint
-If you do not want to run the server from source, you can connect directly to our public hosted endpoint. 
 
-Compatible with standard MCP clients (Claude Desktop, Cursor) and indexed on [Smithery](https://smithery.ai/).
+If you do not want to run the server from source, connect directly to our public hosted endpoint:
 
+* **Remote MCP URL**: `https://x402-agent-tollbooth.onrender.com/mcp`
+* **Discovery Manifest**: `https://x402-agent-tollbooth.onrender.com/.well-known/mcp/server-card.json`
+* **x402 Manifest**: `https://x402-agent-tollbooth.onrender.com/.well-known/x402.json`
+* **Smithery CLI Install**:
 ```bash
 npx @smithery/cli mcp install x402-agent-tollbooth
 ```
