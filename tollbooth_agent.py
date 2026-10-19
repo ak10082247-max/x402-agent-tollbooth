@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, RedirectResponse, PlainTextResponse
 from fastapi.openapi.utils import get_openapi
 from starlette.middleware.cors import CORSMiddleware
 from web3 import Web3
@@ -1101,6 +1101,108 @@ Network: Base Mainnet (Chain ID 8453)
 - {PUBLIC_BASE_URL}/api/audit - 1.00 USDC
 """
     return Response(content=content, media_type="text/plain")
+
+@app.get("/robots.txt", response_class=PlainTextResponse, include_in_schema=False)
+async def robots_txt():
+    return (
+        "User-agent: *\n"
+        "Allow: /\n\n"
+        "User-agent: GPTBot\n"
+        "Allow: /\n\n"
+        "User-agent: ClaudeBot\n"
+        "Allow: /\n\n"
+        f"Sitemap: {PUBLIC_BASE_URL}/sitemap.xml\n"
+    )
+
+@app.get("/sitemap.xml", response_class=Response, include_in_schema=False)
+async def sitemap_xml():
+    urls = [
+        f"{PUBLIC_BASE_URL}/",
+        f"{PUBLIC_BASE_URL}/pricing",
+        f"{PUBLIC_BASE_URL}/privacy",
+        f"{PUBLIC_BASE_URL}/terms",
+        f"{PUBLIC_BASE_URL}/llms.txt",
+        f"{PUBLIC_BASE_URL}/.well-known/x402.json",
+        f"{PUBLIC_BASE_URL}/openapi.json",
+        f"{PUBLIC_BASE_URL}/toll/ai_intel",
+        f"{PUBLIC_BASE_URL}/toll/arbitrage_scan",
+        f"{PUBLIC_BASE_URL}/toll/smart_router",
+        f"{PUBLIC_BASE_URL}/api/audit",
+    ]
+    xml_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for u in urls:
+        xml_lines.append(f"  <url><loc>{u}</loc><changefreq>hourly</changefreq></url>")
+    xml_lines.append("</urlset>")
+    return Response(content="\n".join(xml_lines), media_type="application/xml")
+
+# Bounty Challenge Redirect to Fleet Leader
+@app.get("/bounty.html", include_in_schema=False)
+async def bounty_redirect():
+    return RedirectResponse(url="https://canaryguard-402.onrender.com/bounty.html", status_code=302)
+
+# Compliance, SEO & Metadata Routes
+@app.get("/pricing", include_in_schema=False)
+@app.get("/plans", include_in_schema=False)
+async def pricing_endpoint():
+    return {
+        "service": "x402-agent-tollbooth",
+        "pricing_model": "x402-pay-per-request",
+        "accepted_currencies": ["USDC on Base (eip155:8453)", "USDC on Solana (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)"],
+        "gasless_sponsorship": "100% sponsored ($0 ETH / $0 SOL required)",
+        "tier_base": {"price_per_request": "0.001 - 0.003 USDC", "amount_micro": "1000 - 3000", "description": "Cross-DEX Arbitrage Radar & Smart Order Router"},
+        "tier_audit": {"price_per_request": "0.003 USDC", "amount_micro": "3000", "description": "Autonomous Smart Contract Audit"},
+        "challenge_bounty_url": "https://canaryguard-402.onrender.com/bounty.html",
+        "docs": f"{PUBLIC_BASE_URL}/stats"
+    }
+
+@app.get("/privacy", include_in_schema=False)
+@app.get("/legal/privacy", include_in_schema=False)
+@app.get("/privacy-policy", include_in_schema=False)
+async def privacy_endpoint():
+    return {
+        "service": "x402-agent-tollbooth",
+        "privacy_summary": "Zero-retention deterministic security proxy. No private keys or proprietary trading queries stored on disk.",
+        "data_handling": "Ephemeral, in-memory processing. Request bodies are evaluated statelessly and discarded immediately.",
+        "telemetry": "Only anonymous on-chain transaction hashes and route latency metrics are logged for SLA verification.",
+        "contact": "security@canaryguard.network"
+    }
+
+@app.get("/terms", include_in_schema=False)
+@app.get("/legal/terms", include_in_schema=False)
+@app.get("/terms-of-service", include_in_schema=False)
+async def terms_endpoint():
+    return {
+        "service": "x402-agent-tollbooth",
+        "protocol": "x402 V2 HTTP Micropayment Protocol",
+        "terms": [
+            "All API requests are settled on-chain via EIP-712 or SPL Token transfer authorization.",
+            "Settlements are instant, final, and non-refundable once verified by the facilitator.",
+            "Red-Team Challenge Bounty: Hosted at https://canaryguard-402.onrender.com/bounty.html"
+        ],
+        "compliance": "Non-custodial cryptographic settlement infrastructure."
+    }
+
+@app.get("/about", include_in_schema=False)
+@app.get("/about-us", include_in_schema=False)
+@app.get("/team", include_in_schema=False)
+@app.get("/leadership", include_in_schema=False)
+@app.get("/company", include_in_schema=False)
+@app.get("/contact", include_in_schema=False)
+@app.get("/contact-us", include_in_schema=False)
+@app.get("/press", include_in_schema=False)
+async def about_endpoint():
+    return {
+        "name": "x402-agent-tollbooth",
+        "mission": "Autonomous AI Agent DEX Arbitrage Radar, Smart Order Routing & Contract Auditing Suite",
+        "network": "Base Mainnet (8453) & Solana Mainnet",
+        "facilitators": ["Coinbase CDP", "PayAI Network"],
+        "bounty_challenge": "https://canaryguard-402.onrender.com/bounty.html",
+        "docs": f"{PUBLIC_BASE_URL}/stats"
+    }
+
 
 @app.get("/", include_in_schema=False)
 async def root(request: Request):
