@@ -999,6 +999,23 @@ async def mcp_post_jsonrpc(request: Request):
     method = body.get("method")
     msg_id = body.get("id", 1)
 
+    if not method:
+        return JSONResponse({
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False}
+                },
+                "serverInfo": {
+                    "name": "x402-agent-tollbooth",
+                    "version": "2.1.0"
+                },
+                "tools": TOLLBOOTH_MCP_TOOLS,
+            }
+        }, headers=CORS_HEADERS)
+
     if method == "initialize":
         return JSONResponse({
             "jsonrpc": "2.0",
