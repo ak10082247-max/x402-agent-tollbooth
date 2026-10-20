@@ -1292,6 +1292,10 @@ async def terms_endpoint():
 
 @app.get("/about", include_in_schema=False)
 @app.get("/about-us", include_in_schema=False)
+@app.get("/careers", include_in_schema=False)
+@app.get("/careers/", include_in_schema=False)
+@app.get("/jobs", include_in_schema=False)
+@app.get("/join", include_in_schema=False)
 @app.get("/team", include_in_schema=False)
 @app.get("/leadership", include_in_schema=False)
 @app.get("/company", include_in_schema=False)
