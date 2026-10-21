@@ -1038,6 +1038,49 @@ async def well_known_x402():
         "resources": manifest_resources
     }, headers=CORS_HEADERS)
 
+@app.get("/.well-known/agent-registration.json", include_in_schema=False)
+@app.get("/.well-known/agent.json", include_in_schema=False)
+@app.get("/.well-known/erc8004.json", include_in_schema=False)
+@app.get("/.well-known/agent-card.json", include_in_schema=False)
+@app.get("/agent-metadata.json", include_in_schema=False)
+async def tollbooth_agent_card():
+    return JSONResponse({
+        "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+        "name": "x402 Agent Tollbooth — Autonomous Cross-DEX Arbitrage & Smart Routing Gate",
+        "description": "Autonomous smart contract router, cross-DEX arbitrage radar, and security gate for AI agents on Base and Solana, gated by x402 v2.",
+        "image": f"{PUBLIC_BASE_URL}/icon.png",
+        "version": "2.2.0",
+        "url": PUBLIC_BASE_URL,
+        "provider": {
+            "name": "Kurox Real",
+            "url": PUBLIC_BASE_URL,
+            "wallet": WALLET_ADDRESS,
+        },
+        "active": True,
+        "capabilities": {"streaming": True, "pushNotifications": False},
+        "erc8004": {
+            "identity_registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+            "reputation_registry": "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63",
+            "agent_card": f"{PUBLIC_BASE_URL}/.well-known/agent-card.json",
+        },
+        "securitySchemes": [{
+            "type": "x402",
+            "description": f"EIP-3009 TransferWithAuthorization on Base Mainnet ({ASSET}) & SPL TransferChecked on Solana Mainnet ({SOLANA_USDC_MINT})."
+        }],
+        "services": [
+            {"name": "MCP", "endpoint": f"{PUBLIC_BASE_URL}/mcp", "version": "2024-11-05"},
+            {"name": "HTTP", "endpoint": PUBLIC_BASE_URL, "version": "2.0"}
+        ],
+        "supportedChains": ["eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
+        "registrations": [
+            {
+                "agentId": 335687,
+                "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+            }
+        ],
+        "supportedTrust": ["reputation"]
+    }, headers=CORS_HEADERS)
+
 TOLLBOOTH_MCP_TOOLS = [
     {
         "name": v["name"],
