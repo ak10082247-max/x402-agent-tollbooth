@@ -1081,11 +1081,36 @@ async def tollbooth_agent_card():
         "supportedTrust": ["reputation"]
     }, headers=CORS_HEADERS)
 
+def build_tollbooth_output_schema(endpoint_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    default_resp = endpoint_cfg.get("default_response", {})
+    props = {}
+    required = []
+    for k, val in default_resp.items():
+        required.append(k)
+        if isinstance(val, bool):
+            props[k] = {"type": "boolean"}
+        elif isinstance(val, int):
+            props[k] = {"type": "integer"}
+        elif isinstance(val, float):
+            props[k] = {"type": "number"}
+        elif isinstance(val, list):
+            props[k] = {"type": "array"}
+        elif isinstance(val, dict):
+            props[k] = {"type": "object"}
+        else:
+            props[k] = {"type": "string"}
+    return {
+        "type": "object",
+        "properties": props or {"status": {"type": "string"}},
+        "required": required[:3] if required else ["status"]
+    }
+
 TOLLBOOTH_MCP_TOOLS = [
     {
         "name": v["name"],
         "description": f"{v['description']} Cost: {v['price_usd']} USDC on Base & Solana (100% gasless).",
         "inputSchema": v.get("input_schema", {"type": "object", "properties": {}}),
+        "outputSchema": build_tollbooth_output_schema(v),
         "annotations": {
             "readOnlyHint": True,
             "destructiveHint": False,
