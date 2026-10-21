@@ -1120,15 +1120,49 @@ async def mcp_server_card():
         "tools": TOLLBOOTH_MCP_TOOLS,
     }, headers=CORS_HEADERS)
 
+@app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+@app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
+@app.get("/.well-known/oauth-authorization-server", include_in_schema=False)
+@app.get("/.well-known/openid-configuration", include_in_schema=False)
+async def oauth_protected_resource():
+    return JSONResponse({
+        "resource": PUBLIC_BASE_URL,
+        "authorization_servers": [],
+        "scopes_supported": ["mcp:read", "mcp:call"],
+        "bearer_methods_supported": ["header"],
+        "auth_schemes": ["x402-v2-eip712", "x402-v2-solana"],
+        "payment_recipient": WALLET_ADDRESS,
+        "documentation": f"{PUBLIC_BASE_URL}/docs",
+        "note": "Protected via on-chain x402 V2 gasless micropayments (EIP-712 / SPL TransferChecked)."
+    }, headers=CORS_HEADERS)
+
 @app.post("/mcp", include_in_schema=False)
 async def mcp_post_jsonrpc(request: Request):
     try:
-        body = await request.json()
+        raw_body = await request.body()
+        body = json.loads(raw_body.decode("utf-8")) if raw_body and raw_body.strip() else {}
     except Exception:
-        return JSONResponse({"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error: Invalid JSON"}}, status_code=400, headers=CORS_HEADERS)
+        body = {}
 
-    method = body.get("method")
-    msg_id = body.get("id", 1)
+    method = body.get("method") if isinstance(body, dict) else None
+    msg_id = body.get("id", 1) if isinstance(body, dict) else 1
+
+    if method in ("server/discover", "server/info"):
+        return JSONResponse({
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False}
+                },
+                "serverInfo": {
+                    "name": "x402-agent-tollbooth",
+                    "version": "2.1.0"
+                },
+                "tools": TOLLBOOTH_MCP_TOOLS,
+            }
+        }, headers=CORS_HEADERS)
 
     if not method:
         return JSONResponse({
