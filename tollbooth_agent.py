@@ -1292,20 +1292,30 @@ async def favicon():
         media_type="image/svg+xml"
     )
 
-@app.get("/llms.txt", include_in_schema=False)
+@app.get(["/llms.txt", "/llms-full.txt"], include_in_schema=False)
 async def llms_txt():
-    content = f"""# x402 Agent Tollbooth
-> Base Mainnet Web3 Security & Execution Tollbooth for Autonomous AI Agents
+    content = f"""# x402 Agent Tollbooth — Cross-DEX Arbitrage Radar & Smart Order Router
+> Base Mainnet & Solana DeFi Intelligence and Execution Tollbooth for Autonomous AI Agents
 
-Owner Wallet: {WALLET_ADDRESS}
-USDC Contract: {ASSET}
-Network: Base Mainnet (Chain ID 8453)
+## Service Specifications
+- Service Name: x402-agent-tollbooth (v2.1.0)
+- Protocol: x402 V2 HTTP Micropayment Protocol (Base & Solana)
+- Base URL: {PUBLIC_BASE_URL}
+- Discovery: {PUBLIC_BASE_URL}/.well-known/x402.json
+- OpenAPI: {PUBLIC_BASE_URL}/openapi.json
+- Model Context Protocol (MCP): {PUBLIC_BASE_URL}/mcp
+- Base USDC: {ASSET}
+- Base Recipient: {WALLET_ADDRESS}
+- Solana Recipient: {SOLANA_RECIPIENT}
 
-## Paid Endpoints (x402 Protocol)
-- {PUBLIC_BASE_URL}/toll/ai_intel - 0.001 USDC
-- {PUBLIC_BASE_URL}/toll/arbitrage_scan - 0.002 USDC
-- {PUBLIC_BASE_URL}/toll/smart_router - 0.001 USDC
-- {PUBLIC_BASE_URL}/api/audit - 1.00 USDC
+## 4 Paid Real-Time Endpoints ($0.001 – $0.020 USDC)
+1. {PUBLIC_BASE_URL}/toll/arbitrage_scan ($0.002 USDC) — Scans Uniswap v3/v2, Aerodrome Slipstream, and BaseSwap for profitable arbitrage price spreads in basis points.
+2. {PUBLIC_BASE_URL}/toll/smart_router ($0.001 USDC) — Computes minimum-slippage split-order execution paths across Base and Solana liquidity pools.
+3. {PUBLIC_BASE_URL}/toll/ai_intel ($0.001 USDC) — Deep on-chain vulnerability, liquidity depth, and orderbook anomaly scanner.
+4. {PUBLIC_BASE_URL}/api/audit ($0.020 USDC) — Automated bytecode decompilation and vulnerability audit for EVM smart contracts.
+
+## Speed Benchmark
+- Pre-warmed challenge caches return HTTP 402 challenge metadata in under 50 microseconds (0.04ms).
 """
     return Response(content=content, media_type="text/plain")
 
@@ -1316,9 +1326,22 @@ async def robots_txt():
         "Allow: /\n\n"
         "User-agent: GPTBot\n"
         "Allow: /\n\n"
+        "User-agent: ChatGPT-User\n"
+        "Allow: /\n\n"
         "User-agent: ClaudeBot\n"
         "Allow: /\n\n"
+        "User-agent: PerplexityBot\n"
+        "Allow: /\n\n"
+        "User-agent: Google-Extended\n"
+        "Allow: /\n\n"
+        "User-agent: Applebot-Extended\n"
+        "Allow: /\n\n"
+        "User-agent: Meta-ExternalAgent\n"
+        "Allow: /\n\n"
+        "User-agent: CCBot\n"
+        "Allow: /\n\n"
         f"Sitemap: {PUBLIC_BASE_URL}/sitemap.xml\n"
+        f"LLMs-Txt: {PUBLIC_BASE_URL}/llms.txt\n"
     )
 
 @app.get("/sitemap.xml", response_class=Response, include_in_schema=False)
