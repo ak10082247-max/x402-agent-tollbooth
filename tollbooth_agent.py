@@ -1292,7 +1292,8 @@ async def favicon():
         media_type="image/svg+xml"
     )
 
-@app.get(["/llms.txt", "/llms-full.txt"], include_in_schema=False)
+@app.get("/llms.txt", include_in_schema=False)
+@app.get("/llms-full.txt", include_in_schema=False)
 async def llms_txt():
     content = f"""# x402 Agent Tollbooth — Cross-DEX Arbitrage Radar & Smart Order Router
 > Base Mainnet & Solana DeFi Intelligence and Execution Tollbooth for Autonomous AI Agents
@@ -1306,7 +1307,7 @@ async def llms_txt():
 - Model Context Protocol (MCP): {PUBLIC_BASE_URL}/mcp
 - Base USDC: {ASSET}
 - Base Recipient: {WALLET_ADDRESS}
-- Solana Recipient: {SOLANA_RECIPIENT}
+- Solana Recipient: {SOLANA_WALLET_ADDRESS}
 
 ## 4 Paid Real-Time Endpoints ($0.001 – $0.020 USDC)
 1. {PUBLIC_BASE_URL}/toll/arbitrage_scan ($0.002 USDC) — Scans Uniswap v3/v2, Aerodrome Slipstream, and BaseSwap for profitable arbitrage price spreads in basis points.
@@ -1318,6 +1319,11 @@ async def llms_txt():
 - Pre-warmed challenge caches return HTTP 402 challenge metadata in under 50 microseconds (0.04ms).
 """
     return Response(content=content, media_type="text/plain")
+
+@app.get("/kurox402indexnowkey20261022abc.txt", response_class=PlainTextResponse, include_in_schema=False)
+async def indexnow_key():
+    # IndexNow ownership verification key (must be served at the domain root)
+    return "kurox402indexnowkey20261022abc"
 
 @app.get("/robots.txt", response_class=PlainTextResponse, include_in_schema=False)
 async def robots_txt():
