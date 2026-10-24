@@ -971,14 +971,20 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
 
     # Pre-settlement parameter validation
     if tool_key == "smart_router":
-        raw_amt = body_data.get("amount") or query_params.get("amount") or "1.0"
-        try:
-            amt = float(raw_amt)
-            import math
-            if amt <= 0 or math.isnan(amt) or math.isinf(amt):
+        has_amt = "amount" in body_data or "amount" in query_params
+        if has_amt:
+            raw_amt = body_data.get("amount") if "amount" in body_data else query_params.get("amount")
+            if raw_amt is None or isinstance(raw_amt, bool):
                 return JSONResponse({"error": "Invalid amount", "details": "amount must be a positive finite number"}, status_code=400)
-        except (ValueError, TypeError):
-            return JSONResponse({"error": "Invalid amount", "details": f"could not convert '{raw_amt}' to float"}, status_code=400)
+            try:
+                import math
+                amt = float(raw_amt)
+                if amt <= 0 or math.isnan(amt) or math.isinf(amt):
+                    return JSONResponse({"error": "Invalid amount", "details": "amount must be a positive finite number"}, status_code=400)
+            except (ValueError, TypeError):
+                return JSONResponse({"error": "Invalid amount", "details": f"could not convert '{raw_amt}' to float"}, status_code=400)
+        else:
+            amt = 1.0
 
     # 2. Paid Request: Process settlement only after input validation passes
     settle_ok, settle_data, settle_err = try_settle_payment(payment_sig, tool_key)
@@ -1428,10 +1434,31 @@ async def mcp_post_jsonrpc(request: Request):
         elif tool_key == "smart_router":
             tin = args.get("tokenIn") or "WETH"
             tout = args.get("tokenOut") or "USDC"
-            raw_amt = args.get("amount") or "1.0"
-            try:
-                amt = float(raw_amt)
-            except Exception:
+            has_amt = "amount" in args
+            if has_amt:
+                raw_amt = args.get("amount")
+                if raw_amt is None or isinstance(raw_amt, bool):
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32602, "message": "Invalid amount: must be a positive finite number"}
+                    }, headers=CORS_HEADERS)
+                try:
+                    import math
+                    amt = float(raw_amt)
+                    if amt <= 0 or math.isnan(amt) or math.isinf(amt):
+                        return JSONResponse({
+                            "jsonrpc": "2.0",
+                            "id": msg_id,
+                            "error": {"code": -32602, "message": "Invalid amount: must be a positive finite number"}
+                        }, headers=CORS_HEADERS)
+                except (ValueError, TypeError):
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32602, "message": f"Invalid amount: could not convert '{raw_amt}' to float"}
+                    }, headers=CORS_HEADERS)
+            else:
                 amt = 1.0
             live_route = await compute_live_smart_route(tin, tout, amt)
             resp_data.update(live_route)
@@ -1892,7 +1919,20 @@ async def call_tool_handler(ctx, params, **kwargs) -> types.CallToolResult:
     elif tool_key == "smart_router":
         tin = arguments.get("tokenIn") or "WETH"
         tout = arguments.get("tokenOut") or "USDC"
-        amt = arguments.get("amount") or "1.0"
+        has_amt = "amount" in arguments
+        if has_amt:
+            raw_amt = arguments.get("amount")
+            if raw_amt is None or isinstance(raw_amt, bool):
+                return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=json.dumps({"error": "Invalid amount: must be a positive finite number"}))])
+            try:
+                import math
+                amt = float(raw_amt)
+                if amt <= 0 or math.isnan(amt) or math.isinf(amt):
+                    return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=json.dumps({"error": "Invalid amount: must be a positive finite number"}))])
+            except (ValueError, TypeError):
+                return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=json.dumps({"error": f"Invalid amount: could not convert '{raw_amt}' to float"}))])
+        else:
+            amt = 1.0
         route_res = await compute_live_smart_route(tin, tout, amt)
         resp_data.update(route_res)
 
