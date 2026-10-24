@@ -960,9 +960,7 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
         )
         return JSONResponse(body, status_code=402, headers=headers)
         
-    # 2. Paid Request: Process settlement & return pre-warmed / live response (<50ms)
-    settle_ok, settle_data, settle_err = try_settle_payment(payment_sig, tool_key)
-    
+    # Parse and validate request inputs BEFORE payment settlement
     body_data = {}
     if request.method == "POST":
         try:
@@ -970,6 +968,20 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
         except Exception:
             body_data = {}
     query_params = dict(request.query_params)
+
+    # Pre-settlement parameter validation
+    if tool_key == "smart_router":
+        raw_amt = body_data.get("amount") or query_params.get("amount") or "1.0"
+        try:
+            amt = float(raw_amt)
+            import math
+            if amt <= 0 or math.isnan(amt) or math.isinf(amt):
+                return JSONResponse({"error": "Invalid amount", "details": "amount must be a positive finite number"}, status_code=400)
+        except (ValueError, TypeError):
+            return JSONResponse({"error": "Invalid amount", "details": f"could not convert '{raw_amt}' to float"}, status_code=400)
+
+    # 2. Paid Request: Process settlement only after input validation passes
+    settle_ok, settle_data, settle_err = try_settle_payment(payment_sig, tool_key)
     
     if not settle_ok or not settle_data:
         cached = CHALLENGE_CACHE.get(tool_key)
@@ -1022,12 +1034,15 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
                 pass
 
     tx_hash = (settle_data or {}).get("transaction") or ""
+    actual_network = (settle_data or {}).get("network") or (
+        "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" if (len(tx_hash) > 66 or (tx_hash and not tx_hash.startswith("0x"))) else NETWORK
+    )
     receipt_info = {
         "success": True,
         "transaction": tx_hash,
         "txHash": tx_hash,
         "payer": (settle_data or {}).get("payer") or "",
-        "network": NETWORK,
+        "network": actual_network,
     }
     encoded_receipt = base64.b64encode(json.dumps(receipt_info).encode("utf-8")).decode("utf-8")
 
@@ -1406,11 +1421,20 @@ async def mcp_post_jsonrpc(request: Request):
             resp_data["contractAddress"] = args.get("contractAddress")
         elif tool_key == "ai_intel" and args.get("contractAddress"):
             resp_data["contractAddress"] = args.get("contractAddress")
-        elif tool_key == "arbitrage_scan" and args.get("pair"):
-            resp_data["pair"] = args.get("pair")
-        elif tool_key == "smart_router" and (args.get("tokenIn") or args.get("tokenOut")):
-            resp_data["tokenIn"] = args.get("tokenIn")
-            resp_data["tokenOut"] = args.get("tokenOut")
+        elif tool_key == "arbitrage_scan":
+            pair = args.get("pair") or "WETH/USDC"
+            live_arb = await compute_live_arbitrage_scan(pair)
+            resp_data.update(live_arb)
+        elif tool_key == "smart_router":
+            tin = args.get("tokenIn") or "WETH"
+            tout = args.get("tokenOut") or "USDC"
+            raw_amt = args.get("amount") or "1.0"
+            try:
+                amt = float(raw_amt)
+            except Exception:
+                amt = 1.0
+            live_route = await compute_live_smart_route(tin, tout, amt)
+            resp_data.update(live_route)
 
         return JSONResponse({
             "jsonrpc": "2.0",
