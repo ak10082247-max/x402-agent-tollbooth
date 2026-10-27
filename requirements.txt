@@ -7,3 +7,6 @@ mcp
 pyjwt>=2.8.0
 cryptography>=42.0.0
 eth-account>=0.11.0
+eth-abi>=5,<7
+eth-utils>=5,<7
+google-genai>=1,<3

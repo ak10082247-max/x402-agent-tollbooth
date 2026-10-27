@@ -4,6 +4,8 @@ __pycache__/
 *.env
 *.env.*
 *.db
+*.db*
+deliveries.jsonl*
 patch_*.py
 search.py
 index_bazaar.cjs

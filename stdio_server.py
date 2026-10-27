@@ -1,5 +1,6 @@
 import asyncio
 import os
+os.environ["TOLLBOOTH_LOCAL_STDIO"] = "1"
 from tollbooth_agent import server
 from mcp.server.stdio import stdio_server
 

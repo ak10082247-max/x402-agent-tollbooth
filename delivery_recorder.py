@@ -45,10 +45,10 @@ def record_delivery(
     if endpoint in ["/health", "/ping", "/favicon.ico"]:
         return
 
-    payer_info = decode_payer_from_header(raw_payment_header)
-    resolved_payer = payer_info["payer"]
-    resolved_amount = payer_info["amount"] if status_code == 200 else 0.0
-    settled = bool(status_code == 200 and raw_payment_header)
+    # An authorization header is an intent to pay, never evidence of settlement.
+    resolved_payer = "unpaid_probe"
+    resolved_amount = 0.0
+    settled = False
 
     if payment_response_header:
         try:
@@ -57,11 +57,9 @@ def record_delivery(
             if not cleaned_resp.startswith("{"):
                 cleaned_resp = base64.b64decode(cleaned_resp).decode("utf-8")
             data_resp = json.loads(cleaned_resp)
-            if "payer" in data_resp:
-                resolved_payer = str(data_resp["payer"]).lower()
-            if "amount" in data_resp:
-                resolved_amount = float(data_resp["amount"]) / 1e6
-            if data_resp.get("success") is True:
+            if data_resp.get("success") is True and data_resp.get("transaction") and data_resp.get("payer") and data_resp.get("network") and data_resp.get("amount") and data_resp.get("resource"):
+                resolved_payer = str(data_resp["payer"])
+                resolved_amount = int(data_resp["amount"]) / 1e6
                 settled = True
         except Exception:
             pass
