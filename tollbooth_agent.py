@@ -450,7 +450,7 @@ def build_toll_challenge(tool_key: str) -> Tuple[Dict[str, str], Dict[str, Any]]
         "extensions": discovery
     }
 
-    challenge_json = json.dumps(challenge_payload)
+    challenge_json = json.dumps(challenge_payload, separators=(",", ":"))
     challenge_b64 = base64.b64encode(challenge_json.encode("utf-8")).decode("utf-8")
     www_auth = build_ietf_mpp_www_authenticate(amount_units, WALLET_ADDRESS)
 
@@ -465,7 +465,7 @@ def build_toll_challenge(tool_key: str) -> Tuple[Dict[str, str], Dict[str, Any]]
         "X-402-Chain-Id": str(CHAIN_ID),
         "PAYMENT-REQUIRED": challenge_b64,
         "X-Payment-Required": challenge_b64,
-        "X-402-Payment-Required": challenge_b64,
+
         **CORS_HEADERS
     }
 
