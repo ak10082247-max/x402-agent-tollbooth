@@ -8,6 +8,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import httpx
@@ -20,6 +21,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 import tollbooth_agent as appmod
 import live_quotes as quotes
 import paid_execution as journal
+from scripts import reconcile_paid_operation as recovery
 
 # Deterministic, unfunded fixture key. Never loaded from an environment or wallet.
 FIXTURE_KEY = bytes.fromhex("01" * 32)
@@ -103,7 +105,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         message = bytes([128, 2, 0, 0, 2]) + appmod._decode_b58_32(appmod.SOLANA_FEE_PAYER) + public + bytes(32) + bytes([0, 0])
         transaction = bytes([2]) + bytes(64) + fixture.sign(message) + message
         payload = {"x402Version": 2, "accepted": dict(appmod.CHALLENGE_CACHE["arbitrage_scan"]["body"]["accepts"][1]), "resource": {"url": appmod.PUBLIC_BASE_URL + "/toll/arbitrage_scan"}, "payload": {"transaction": base64.b64encode(transaction).decode()}}
-        settlement = {"success": True, "transaction": "A" * 88, "payer": "fixture_public_payer", "network": appmod.SOLANA_NETWORK}
+        settlement = {"success": True, "transaction": appmod._encode_base58(bytes.fromhex("01" * 64)), "payer": appmod._encode_base58(public), "network": appmod.SOLANA_NETWORK}
         with patch.object(appmod, "execute_tool", AsyncMock(return_value={"status": "quoted"})), patch.object(appmod, "try_settle_payment", return_value=(True, settlement, None)):
             result = await self.client.post("/toll/arbitrage_scan", json={}, headers={"PAYMENT-SIGNATURE": json.dumps(payload)})
         self.assertEqual(result.status_code, 200)
@@ -112,6 +114,29 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(receipt["amount"], "2000")
         self.assertEqual(receipt["network"], appmod.SOLANA_NETWORK)
         self.assertEqual(receipt["resource"], appmod.PUBLIC_BASE_URL + "/toll/arbitrage_scan")
+
+    async def test_mismatched_or_malformed_settlement_cannot_deliver(self):
+        valid = {"success": True, "transaction": "0x" + "ab" * 32, "payer": PAYER, "network": appmod.NETWORK}
+        for nonce, change in enumerate(({"transaction": "invented"}, {"payer": appmod.WALLET_ADDRESS}, {"amount": "1"}, {"resource": "https://other.invalid/"}), 800):
+            with patch.object(appmod, "execute_tool", AsyncMock(return_value={"status": "quoted"})), patch.object(appmod, "try_settle_payment", return_value=(True, {**valid, **change}, None)) as settle:
+                header = {"PAYMENT-SIGNATURE": authorization(nonce=nonce)}
+                first = await self.client.post("/toll/arbitrage_scan", json={}, headers=header)
+                second = await self.client.post("/toll/arbitrage_scan", json={}, headers=header)
+            self.assertEqual(first.status_code, 503)
+            self.assertEqual(second.status_code, 409)
+            self.assertNotIn("payment-response", first.headers)
+            settle.assert_called_once()
+
+    async def test_future_or_overlong_new_authorization_never_consumes_provider(self):
+        for nonce, after, before in ((901, int(time.time()) + 30, int(time.time()) + 120), (902, 0, int(time.time()) + 1000)):
+            body = json.loads(base64.b64decode(authorization(nonce=nonce)))
+            body["payload"]["authorization"].update(validAfter=str(after), validBefore=str(before))
+            header = authorization(nonce=nonce, payload=body["payload"])
+            with patch.object(appmod, "execute_tool", AsyncMock()) as execute, patch.object(appmod, "try_settle_payment") as settle:
+                result = await self.client.post("/toll/arbitrage_scan", json={}, headers={"PAYMENT-SIGNATURE": header})
+            self.assertEqual(result.status_code, 400)
+            execute.assert_not_called()
+            settle.assert_not_called()
 
     async def test_blink_and_feed_cannot_fabricate_paid_or_safe_result(self):
         action = await self.client.get("/api/actions/scan")
@@ -200,15 +225,250 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_source_review_never_falls_back_to_safe(self):
         with patch.object(appmod, "ai_client", None):
-            result = await appmod.analyze_source("contract T { function x() external { target.delegatecall(data); } }", False)
+            result = await appmod.analyze_source("contract T { function x() external { target.delegatecall(data); } }", False, limited_review=True)
             self.assertFalse(result["safety_proven"])
             self.assertIsNone(result["score"])
             self.assertEqual(result["findings"][0]["indicator"], "delegatecall")
+
+    async def test_missing_model_does_not_charge_for_silent_pattern_fallback(self):
+        with patch.object(appmod, "ai_client", None), patch.object(appmod, "try_settle_payment") as settle:
+            response = await self.client.post("/toll/ai_intel", json={"prompt": "contract OwnerFixture {}"}, headers={"PAYMENT-SIGNATURE": authorization("ai_intel")})
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(response.json()["charged"])
+        settle.assert_not_called()
+
+    async def test_reclaimed_preparation_fences_paused_worker_out_of_settlement(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+        calls = 0
+        async def fulfill(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                entered.set()
+                await resume.wait()
+                return {"status": "quoted", "worker": "stale"}
+            return {"status": "quoted", "worker": "current"}
+        settled = {"success": True, "transaction": "0x" + "ab" * 32, "payer": PAYER, "network": appmod.NETWORK}
+        header = {"PAYMENT-SIGNATURE": authorization(nonce=955)}
+        identity, _ = appmod.payment_identity(header["PAYMENT-SIGNATURE"], "arbitrage_scan")
+        with patch.object(appmod, "execute_tool", side_effect=fulfill), patch.object(appmod, "try_settle_payment", return_value=(True, settled, None)) as settle:
+            first_task = asyncio.create_task(self.client.post("/toll/arbitrage_scan", json={}, headers=header))
+            await asyncio.wait_for(entered.wait(), timeout=10)
+            with journal.connect() as connection:
+                connection.execute("UPDATE paid_fulfillments SET updated_at=? WHERE authorization_id=?", (time.time() - journal.PREPARATION_LEASE_SECONDS - 1, identity))
+            current = await self.client.post("/toll/arbitrage_scan", json={}, headers=header)
+            resume.set()
+            stale = await first_task
+        self.assertEqual(current.status_code, 200)
+        self.assertEqual(current.json()["worker"], "current")
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(stale.json()["error"], "PREPARATION_SUPERSEDED")
+        settle.assert_called_once()
+        self.assertEqual(journal.claim(identity, "arbitrage_scan", {})["response"]["worker"], "current")
 
     async def test_version_revision(self):
         with patch.dict(os.environ, {"RENDER_GIT_COMMIT": "revision-under-test"}):
             response = await self.client.get("/version")
             self.assertEqual(response.json()["revision"], "revision-under-test")
+
+
+class RecoveryProofTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.environment = patch.dict(os.environ, {"PAYMENTS_DB_PATH": str(Path(self.temp.name) / "recover.db")})
+        self.environment.start()
+
+    def tearDown(self):
+        self.environment.stop()
+        self.temp.cleanup()
+
+    def retain(self, raw):
+        identity, _ = appmod.payment_identity(raw, "arbitrage_scan")
+        owner = journal.claim(identity, "arbitrage_scan", {})["owner"]
+        journal.prepare(identity, {"status": "quoted", "retained": "actual requested result"}, owner)
+        journal.finish(identity, "settlement_unknown", owner=owner)
+        return identity
+
+    def base_rpc(self, raw, *, wrong_nonce=False):
+        auth = json.loads(base64.b64decode(raw))["payload"]["authorization"]
+        topic = lambda address: "0x" + address[2:].lower().rjust(64, "0")
+        block_hash = "0x" + "cc" * 32
+        transaction = "0x" + "ab" * 32
+        logs = [
+            {"address": appmod.ASSET, "topics": ["0x" + keccak(text="Transfer(address,address,uint256)").hex(), topic(PAYER), topic(appmod.WALLET_ADDRESS)], "data": hex(2000)},
+            {"address": appmod.ASSET, "topics": ["0x" + keccak(text="AuthorizationUsed(address,bytes32)").hex(), topic(PAYER), "0x" + "00" * 32 if wrong_nonce else auth["nonce"]], "data": "0x"},
+        ]
+        def rpc(method, params):
+            if method == "eth_chainId":
+                return "0x2105"
+            if method == "eth_getTransactionReceipt":
+                return {"transactionHash": transaction, "status": "0x1", "blockHash": block_hash, "blockNumber": "0x123", "logs": logs}
+            if method == "eth_getBlockByNumber":
+                return {"hash": block_hash, "number": "0x123"}
+            self.fail("Recovery may only read public chain evidence")
+        return transaction, rpc
+
+    def test_finalized_base_transfer_and_nonce_recover_retained_delivery_without_settlement(self):
+        raw = authorization(nonce=998)
+        identity = self.retain(raw)
+        transaction, rpc = self.base_rpc(raw)
+        with patch.object(appmod, "try_settle_payment", side_effect=AssertionError("Recovery must never settle")):
+            result = recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
+        self.assertEqual(result["new_settlements_submitted"], 0)
+        recovered = journal.claim(identity, "arbitrage_scan", {})
+        self.assertEqual(recovered["state"], "delivered")
+        self.assertEqual(recovered["response"]["retained"], "actual requested result")
+        self.assertEqual(recovered["receipt"]["operator_reconciliation"]["commitment"], "finalized")
+
+    def test_same_value_transfer_with_different_nonce_cannot_recover_purchase(self):
+        raw = authorization(nonce=999)
+        identity = self.retain(raw)
+        transaction, rpc = self.base_rpc(raw, wrong_nonce=True)
+        with self.assertRaises(recovery.ReconciliationError):
+            recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
+        self.assertEqual(journal.claim(identity, "arbitrage_scan", {})["state"], "settlement_unknown")
+
+    def test_solana_recovery_requires_exact_signed_message_and_usdc_debit_credit(self):
+        # Fully synthetic RPC fixture; no Solana transfer is submitted.
+        fixture = Ed25519PrivateKey.from_private_bytes(bytes.fromhex("02" * 32))
+        public = fixture.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+        message = bytes([128, 2, 0, 0, 2]) + appmod._decode_b58_32(appmod.SOLANA_FEE_PAYER) + public + bytes(32) + bytes([0, 0])
+        buyer_signature = fixture.sign(message)
+        signed = bytes([2]) + bytes(64) + buyer_signature + message
+        payload = {"x402Version": 2, "accepted": dict(appmod.CHALLENGE_CACHE["arbitrage_scan"]["body"]["accepts"][1]), "payload": {"transaction": base64.b64encode(signed).decode()}}
+        raw = json.dumps(payload)
+        identity = self.retain(raw)
+        transaction = appmod._encode_base58(bytes.fromhex("03" * 64))
+        actual = bytes([2]) + bytes.fromhex("03" * 64) + buyer_signature + message
+        payer = appmod._encode_base58(public)
+        entry = lambda owner, amount: {"owner": owner, "mint": appmod.SOLANA_USDC_MINT, "uiTokenAmount": {"decimals": 6, "amount": str(amount)}}
+        result = {"slot": 1234, "transaction": [base64.b64encode(actual).decode(), "base64"], "meta": {"err": None, "preTokenBalances": [entry(payer, 3000), entry(appmod.SOLANA_WALLET_ADDRESS, 0)], "postTokenBalances": [entry(payer, 1000), entry(appmod.SOLANA_WALLET_ADDRESS, 2000)]}}
+        def rpc(method, params):
+            return "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" if method == "getGenesisHash" else result
+        result["meta"]["postTokenBalances"][1] = entry(appmod.SOLANA_WALLET_ADDRESS, 1999)
+        with self.assertRaises(recovery.ReconciliationError):
+            recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
+        self.assertEqual(journal.claim(identity, "arbitrage_scan", {})["state"], "settlement_unknown")
+        result["meta"]["postTokenBalances"][1] = entry(appmod.SOLANA_WALLET_ADDRESS, 2000)
+        recovered = recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
+        self.assertEqual(recovered["state"], "delivered")
+
+
+class ModelCostTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.environment = patch.dict(os.environ, {"PAYMENTS_DB_PATH": str(Path(self.temp.name) / "costs.db")})
+        self.environment.start()
+
+    async def asyncTearDown(self):
+        self.environment.stop()
+        self.temp.cleanup()
+
+    async def test_counted_input_and_maximum_output_fit_actual_endpoint_budget(self):
+        calls = []
+        def generate(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(text='{"findings": []}', usage_metadata=SimpleNamespace(prompt_token_count=100, candidates_token_count=100, thoughts_token_count=0))
+        client = SimpleNamespace(models=SimpleNamespace(count_tokens=lambda **kw: SimpleNamespace(total_tokens=100), generate_content=generate))
+        # Fixture rates are test inputs, not a claim about provider prices.
+        with patch.object(appmod, "ai_client", client), patch.dict(os.environ, {"AUDIT_INPUT_USD_PER_MILLION": "0.3", "AUDIT_OUTPUT_USD_PER_MILLION": "2.5", "AUDIT_MAX_PROVIDER_COST_RATIO": "0.5", "AUDIT_MAX_OUTPUT_TOKENS": "2048"}):
+            result = await appmod.analyze_source("contract T {}", revenue_usdc="0.001")
+        self.assertLessEqual(calls[0]["config"]["max_output_tokens"], 188)
+        self.assertEqual(calls[0]["config"]["thinking_config"]["thinking_budget"], 0)
+        self.assertEqual(result["provider_usage"]["estimated_provider_cost_usd"], "0.00028")
+        self.assertFalse(result["provider_usage"]["accounting_profit_proven"])
+
+    async def test_unaffordable_input_never_starts_model_generation(self):
+        from unittest.mock import Mock
+        generate = Mock()
+        client = SimpleNamespace(models=SimpleNamespace(count_tokens=lambda **kw: SimpleNamespace(total_tokens=100000), generate_content=generate))
+        with patch.object(appmod, "ai_client", client), patch.dict(os.environ, {"AUDIT_INPUT_USD_PER_MILLION": "0.3", "AUDIT_OUTPUT_USD_PER_MILLION": "2.5", "AUDIT_MAX_PROVIDER_COST_RATIO": "0.5", "AUDIT_MAX_OUTPUT_TOKENS": "2048"}):
+            with self.assertRaises(quotes.QuoteError) as raised:
+                await appmod.analyze_source("contract T {}", revenue_usdc="0.02")
+        self.assertEqual(raised.exception.code, "AUDIT_COST_LIMIT_EXCEEDED")
+        generate.assert_not_called()
+
+    async def test_missing_pricing_policy_never_counts_or_generates(self):
+        from unittest.mock import Mock
+        models = Mock()
+        with patch.object(appmod, "ai_client", SimpleNamespace(models=models)), patch.dict(os.environ, {"AUDIT_MODEL": "unreviewed-fixture-model"}, clear=True):
+            with self.assertRaises(quotes.QuoteError) as raised:
+                await appmod.analyze_source("contract T {}")
+        self.assertEqual(raised.exception.code, "AUDIT_COST_POLICY_UNCONFIGURED")
+        models.assert_not_called()
+        models.count_tokens.assert_not_called()
+        models.generate_content.assert_not_called()
+
+    async def test_named_default_profile_uses_verified_paid_rates(self):
+        with patch.dict(os.environ, {}, clear=True):
+            input_rate, output_rate, budget, limit, pricing = appmod._audit_cost_policy("0.001", "gemini-2.5-flash")
+        self.assertEqual(str(input_rate), "0.30")
+        self.assertEqual(str(output_rate), "2.50")
+        self.assertEqual(str(budget), "0.0005")
+        self.assertEqual(pricing["pricing_verified_on"], "2026-10-27")
+
+    async def test_invalid_model_json_still_records_measured_operating_cost(self):
+        client = SimpleNamespace(models=SimpleNamespace(count_tokens=lambda **kw: SimpleNamespace(total_tokens=100), generate_content=lambda **kw: SimpleNamespace(text="incomplete JSON", usage_metadata=SimpleNamespace(prompt_token_count=100, candidates_token_count=10, thoughts_token_count=0))))
+        with patch.object(appmod, "ai_client", client), patch.dict(os.environ, {"AUDIT_MODEL": "gemini-2.5-flash"}):
+            with self.assertRaises(quotes.QuoteError):
+                await appmod.analyze_source("contract T {}")
+        with journal.connect() as connection:
+            row = connection.execute("SELECT state,metadata_json FROM provider_cost_events").fetchone()
+        self.assertEqual(row[0], "measured_estimate")
+        self.assertEqual(json.loads(row[1])["output_tokens"], 10)
+        self.assertFalse(json.loads(row[1])["customer_revenue_confirmed"])
+
+    async def test_generation_failure_preserves_unknown_usage_reservation(self):
+        from unittest.mock import Mock
+        client = SimpleNamespace(models=SimpleNamespace(count_tokens=lambda **kw: SimpleNamespace(total_tokens=100), generate_content=Mock(side_effect=TimeoutError("fixture"))))
+        with patch.object(appmod, "ai_client", client), patch.dict(os.environ, {"AUDIT_MODEL": "gemini-2.5-flash"}):
+            with self.assertRaises(quotes.QuoteError):
+                await appmod.analyze_source("contract T {}")
+        with journal.connect() as connection:
+            row = connection.execute("SELECT state,metadata_json FROM provider_cost_events").fetchone()
+        self.assertEqual(row[0], "reserved_usage_unknown")
+        self.assertNotIn("estimated_provider_cost_usd", json.loads(row[1]))
+
+    async def test_unexpected_thinking_usage_is_counted_and_cannot_be_sold(self):
+        client = SimpleNamespace(models=SimpleNamespace(count_tokens=lambda **kw: SimpleNamespace(total_tokens=100), generate_content=lambda **kw: SimpleNamespace(text='{"findings":[]}', usage_metadata=SimpleNamespace(prompt_token_count=100, candidates_token_count=100, thoughts_token_count=100))))
+        with patch.object(appmod, "ai_client", client), patch.dict(os.environ, {"AUDIT_MODEL": "gemini-2.5-flash"}):
+            with self.assertRaises(quotes.QuoteError) as raised:
+                await appmod.analyze_source("contract T {}", revenue_usdc="0.001")
+        self.assertEqual(raised.exception.code, "AUDIT_PROVIDER_BUDGET_EXCEEDED")
+
+
+class SettlementBoundaryTests(unittest.TestCase):
+    def test_cdp_timeout_and_server_error_never_submit_to_second_settler(self):
+        for failure in (httpx.ReadTimeout("fixture"), httpx.Response(500, json={"error": "post-broadcast failure"}), httpx.Response(200, json={"success": "true"})):
+            reply = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}
+            with patch.object(appmod, "load_cdp_credentials", return_value=("fixture", "fixture")), patch.object(appmod, "generate_cdp_jwt", return_value="fixture"), patch.object(appmod.httpx.Client, "post", **reply) as post, patch.object(appmod, "_settle_via_relay") as relay:
+                ok, _, error = appmod.settle_via_cdp_facilitator({}, {})
+            self.assertFalse(ok)
+            self.assertIn("SETTLEMENT_UNKNOWN", error)
+            post.assert_called_once()
+            relay.assert_not_called()
+
+    def test_missing_cdp_credentials_use_direct_public_payai_once(self):
+        settled = {"success": True, "transaction": "0x" + "ab" * 32, "payer": PAYER, "network": appmod.NETWORK}
+        header = authorization()
+        with patch.object(appmod, "load_cdp_credentials", return_value=(None, None)), patch.object(appmod.httpx.Client, "post", return_value=httpx.Response(200, json=settled)) as post:
+            ok, result, error = appmod.try_settle_payment(header, "arbitrage_scan")
+        self.assertTrue(ok)
+        self.assertEqual(result, settled)
+        self.assertIsNone(error)
+        self.assertEqual(post.call_args.args[0], appmod.PAYAI_FACILITATOR_URL + "/settle")
+        self.assertEqual(post.call_args.kwargs["json"], appmod.canonical_payment(header, "arbitrage_scan"))
+        post.assert_called_once()
+
+    def test_client_cannot_change_version_quote_timeout_or_extra(self):
+        for field, value in (("version", 1), ("timeout", 3600), ("extra", {"name": "substituted"})):
+            decoded = json.loads(base64.b64decode(authorization()))
+            if field == "version":
+                decoded["x402Version"] = value
+            else:
+                decoded["accepted"]["maxTimeoutSeconds" if field == "timeout" else "extra"] = value
+            with self.assertRaises(quotes.QuoteError):
+                appmod.payment_identity(json.dumps(decoded), "arbitrage_scan")
 
 
 class QuoteAdapterTests(unittest.IsolatedAsyncioTestCase):
