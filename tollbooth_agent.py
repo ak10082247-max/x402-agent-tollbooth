@@ -12,7 +12,7 @@ import logging
 import asyncio
 import hashlib
 from decimal import Decimal, InvalidOperation, ROUND_FLOOR
-from paid_execution import claim, prepare, finish, release_unpaid, digest, OperationSuperseded, reserve_provider_cost, measure_provider_cost
+from paid_execution import claim, lookup, prepare, finish, release_unpaid, digest, OperationSuperseded, reserve_provider_cost, measure_provider_cost
 from live_quotes import compute_quote, validate_request, QuoteError, ADDRESS
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
@@ -74,11 +74,17 @@ AGENT_CONTINUATION = {
 NETWORK = "eip155:8453"
 CHAIN_ID = 8453
 ASSET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"  # Base Mainnet USDC
-WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+RETIRED_WALLET_ADDRESS = "0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1"
+RETIRED_SOLANA_WALLET_ADDRESS = "3tQ4GthjUMqNsyrb1rZMocMHoNewFQWjDUvHZqWeYuCN"
+WALLET_ADDRESS = (os.environ.get("PAYOUT_WALLET_ADDRESS") or os.environ.get("WALLET_ADDRESS") or "0x80E0Ae84679b7f11bE171DaADd492FBECf628cd6").strip()
+if WALLET_ADDRESS.lower() == RETIRED_WALLET_ADDRESS.lower():
+    WALLET_ADDRESS = "0x80E0Ae84679b7f11bE171DaADd492FBECf628cd6"
 SOLANA_NETWORK = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
 SOLANA_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-SOLANA_WALLET_ADDRESS = os.environ.get("SOLANA_MERCHANT_ADDRESS", "3tQ4GthjUMqNsyrb1rZMocMHoNewFQWjDUvHZqWeYuCN")
-SOLANA_USDC_ATA = "3shUSbf9mkGabKqa2pdV7ZrstYvHozwusurLLuugf4dc"
+SOLANA_WALLET_ADDRESS = (os.environ.get("SOLANA_MERCHANT_ADDRESS") or "9wuMysgXwNhtQeqJgGByAiMYc4EjzZ5wUSmnjrrt3ffh").strip()
+if SOLANA_WALLET_ADDRESS == RETIRED_SOLANA_WALLET_ADDRESS:
+    SOLANA_WALLET_ADDRESS = "9wuMysgXwNhtQeqJgGByAiMYc4EjzZ5wUSmnjrrt3ffh"
+SOLANA_USDC_ATA = "DD3A7jaXFeHcif9eYj6Vhomuxypat5Yxi8ow6wxz27yL"
 SOLANA_FEE_PAYER = "CjNFTjvBhbJJd2B5ePPMHRLx1ELZpa8dwQgGL727eKww"
 PAYAI_FACILITATOR_URL = "https://facilitator.payai.network"
 TRANSFER_EVENT_SIGNATURE = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -807,7 +813,7 @@ async def execute_tool(tool_key, args):
     return {**result, "service": "x402-agent-tollbooth", "endpoint": TOLL_ENDPOINTS[tool_key]["path"], "timestamp": int(time.time())}
 
 
-def payment_identity(raw_header, tool_key):
+def payment_identity(raw_header, tool_key, *, retired_merchant=False):
     try:
         text = raw_header.strip()
         payload = json.loads(text if text.startswith("{") else base64.b64decode(text, validate=True))
@@ -825,7 +831,8 @@ def payment_identity(raw_header, tool_key):
         network = (accepted or {}).get("network") or payload.get("network") or NETWORK
         if network not in (NETWORK, SOLANA_NETWORK):
             raise ValueError("Unsupported payment network")
-        expected = {"scheme": "exact", "network": network, "amount": config["amount_microunits"], "asset": SOLANA_USDC_MINT if network == SOLANA_NETWORK else ASSET, "payTo": SOLANA_WALLET_ADDRESS if network == SOLANA_NETWORK else WALLET_ADDRESS}
+        recipient = (RETIRED_SOLANA_WALLET_ADDRESS if network == SOLANA_NETWORK else RETIRED_WALLET_ADDRESS) if retired_merchant else (SOLANA_WALLET_ADDRESS if network == SOLANA_NETWORK else WALLET_ADDRESS)
+        expected = {"scheme": "exact", "network": network, "amount": config["amount_microunits"], "asset": SOLANA_USDC_MINT if network == SOLANA_NETWORK else ASSET, "payTo": recipient}
         if accepted is not None:
             for field, value in expected.items():
                 actual = accepted.get(field)
@@ -880,7 +887,7 @@ def payment_identity(raw_header, tool_key):
             signature = inner.get("signature") or payload.get("signature")
             if not isinstance(auth, dict) or not ADDRESS.fullmatch(str(auth.get("from", ""))):
                 raise ValueError("Invalid EIP-3009 payer")
-            if str(auth.get("to", "")).lower() != WALLET_ADDRESS.lower() or str(auth.get("value")) != config["amount_microunits"]:
+            if str(auth.get("to", "")).lower() != recipient.lower() or str(auth.get("value")) != config["amount_microunits"]:
                 raise ValueError("Authorization recipient or exact amount does not match this endpoint")
             if not re.fullmatch(r"0x[0-9a-fA-F]{64}", str(auth.get("nonce", ""))) or not re.fullmatch(r"0x[0-9a-fA-F]{130}", str(signature or "")):
                 raise ValueError("Invalid authorization nonce or signature")
@@ -901,13 +908,17 @@ def payment_identity(raw_header, tool_key):
         raise QuoteError("INVALID_PAYMENT", str(exc), 400) from exc
 
 
-def canonical_payment(raw_header, tool_key):
+def canonical_payment(raw_header, tool_key, *, retired_merchant=False):
     """Use the same server-owned envelope for /verify and /settle."""
-    _, network = payment_identity(raw_header, tool_key)
+    _, network = payment_identity(raw_header, tool_key, retired_merchant=retired_merchant)
     text = raw_header.strip()
     decoded = json.loads(text if text.startswith("{") else base64.b64decode(text, validate=True))
     accepted = next(item for item in CHALLENGE_CACHE[tool_key]["body"]["accepts"] if item["network"] == network)
     requirements = {key: accepted[key] for key in ("scheme", "network", "amount", "asset", "payTo", "maxTimeoutSeconds", "extra")}
+    if retired_merchant:
+        # Only authenticated retained-result recovery and the offline proof tool
+        # use historical terms. All /verify and /settle callers use the default.
+        requirements["payTo"] = RETIRED_SOLANA_WALLET_ADDRESS if network == SOLANA_NETWORK else RETIRED_WALLET_ADDRESS
     inner = decoded.get("payload") or decoded
     if network == SOLANA_NETWORK:
         payload = {"transaction": inner["transaction"]}
@@ -940,8 +951,8 @@ def _canonical_payer(body):
     return _encode_base58(serialized[offset + 128 + 37:offset + 128 + 69])
 
 
-def validate_paid_receipt(settled, raw_header, tool_key):
-    body = canonical_payment(raw_header, tool_key)
+def validate_paid_receipt(settled, raw_header, tool_key, *, retired_merchant=False):
+    body = canonical_payment(raw_header, tool_key, retired_merchant=retired_merchant)
     quote = body["paymentRequirements"]
     network = quote["network"]
     expected_payer = _canonical_payer(body)
@@ -949,6 +960,8 @@ def validate_paid_receipt(settled, raw_header, tool_key):
     pattern = r"0x[0-9a-fA-F]{64}" if network == NETWORK else r"[1-9A-HJ-NP-Za-km-z]{80,90}"
     if settled.get("success") is not True or not isinstance(transaction, str) or not re.fullmatch(pattern, transaction):
         raise ValueError("Settlement did not acknowledge a valid transaction")
+    if network == NETWORK and int(transaction, 16) == 0:
+        raise ValueError("Settlement transaction cannot be the zero hash")
     if network == SOLANA_NETWORK:
         alphabet, value = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz", 0
         for char in transaction:
@@ -1001,6 +1014,7 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
     if not payment_sig:
         cached = CHALLENGE_CACHE[tool_key]
         return JSONResponse(cached["body"], status_code=402, headers=cached["headers"])
+    retired_merchant = False
     try:
         args = dict(request.query_params)
         if request.method == "POST":
@@ -1009,14 +1023,25 @@ async def dispatch_paid_endpoint(request: Request, tool_key: str):
                 raise QuoteError("INVALID_INPUT", "Body must be a JSON object", 400)
             args.update(body)
         validate_tool_input(tool_key, args)
-        authorization_id, network = payment_identity(payment_sig, tool_key)
+        try:
+            authorization_id, network = payment_identity(payment_sig, tool_key)
+        except QuoteError as current_error:
+            try:
+                authorization_id, network = payment_identity(payment_sig, tool_key, retired_merchant=True)
+                retired_merchant = True
+            except QuoteError:
+                raise current_error
     except QuoteError as exc:
         return JSONResponse({"error": exc.code, "details": str(exc), "charged": False}, status_code=exc.http_status, headers=CORS_HEADERS)
     except (ValueError, TypeError):
         return JSONResponse({"error": "INVALID_JSON", "charged": False}, status_code=400, headers=CORS_HEADERS)
-    entry = claim(authorization_id, tool_key, args)
+    # Retired authorizations only inspect the journal. They cannot claim a new
+    # operation, reclaim an expired worker, run a provider, or reach settlement.
+    entry = lookup(authorization_id, tool_key, args) if retired_merchant else claim(authorization_id, tool_key, args)
     if entry["state"] == "delivered":
         return paid_response(entry["response"], entry["receipt"], True)
+    if retired_merchant and entry["state"] not in ("conflict", "settling", "settlement_unknown"):
+        return JSONResponse({"error": "RETIRED_MERCHANT", "charged": False, "details": "This recipient is retired. Only completed legacy deliveries can be recovered with this authorization."}, status_code=402, headers=CORS_HEADERS)
     if entry["state"] != "claimed":
         state = entry["state"]
         return JSONResponse({"error": "PAYMENT_REQUEST_CONFLICT" if state == "conflict" else "PAYMENT_RECOVERY_REQUIRED", "state": state, "authorization_id": authorization_id, "details": "Do not authorize another payment while settlement is unresolved"}, status_code=409, headers=CORS_HEADERS)

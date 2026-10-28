@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import os
+import runpy
 import sys
 import tempfile
 import time
@@ -38,6 +39,111 @@ def authorization(tool="arbitrage_scan", nonce=1, **overrides):
     typed = {"types": {"EIP712Domain": [{"name": "name", "type": "string"}, {"name": "version", "type": "string"}, {"name": "chainId", "type": "uint256"}, {"name": "verifyingContract", "type": "address"}], "TransferWithAuthorization": [{"name": "from", "type": "address"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"}, {"name": "validAfter", "type": "uint256"}, {"name": "validBefore", "type": "uint256"}, {"name": "nonce", "type": "bytes32"}]}, "primaryType": "TransferWithAuthorization", "domain": {"name": "USD Coin", "version": "2", "chainId": appmod.CHAIN_ID, "verifyingContract": appmod.ASSET}, "message": {**auth, "value": int(auth["value"]), "validAfter": int(auth["validAfter"]), "validBefore": int(auth["validBefore"])}}
     body["payload"]["signature"] = "0x" + Account.sign_message(encode_typed_data(full_message=typed), FIXTURE_KEY).signature.hex().removeprefix("0x")
     return base64.b64encode(json.dumps(body).encode()).decode()
+
+
+def retired_authorization(network, nonce=1):
+    """Authentic, unfunded buyer fixture addressed to the retired merchant."""
+    if network == appmod.NETWORK:
+        body = json.loads(base64.b64decode(authorization(nonce=nonce)))
+        body["accepted"]["payTo"] = appmod.RETIRED_WALLET_ADDRESS
+        body["payload"]["authorization"]["to"] = appmod.RETIRED_WALLET_ADDRESS
+        return authorization(nonce=nonce, accepted=body["accepted"], payload=body["payload"])
+    fixture = Ed25519PrivateKey.from_private_bytes(bytes.fromhex("02" * 32))
+    public = fixture.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    message = bytes([128, 2, 0, 0, 2]) + appmod._decode_b58_32(appmod.SOLANA_FEE_PAYER) + public + bytes(32) + bytes([0, 0])
+    wire = bytes([2]) + bytes(64) + fixture.sign(message) + message
+    quote = {**appmod.CHALLENGE_CACHE["arbitrage_scan"]["body"]["accepts"][1], "payTo": appmod.RETIRED_SOLANA_WALLET_ADDRESS}
+    return json.dumps({"x402Version": 2, "accepted": quote, "resource": {"url": appmod.PUBLIC_BASE_URL + "/toll/arbitrage_scan"}, "payload": {"transaction": base64.b64encode(wire).decode()}})
+
+
+class MerchantRotationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = patch.dict(os.environ, {"PAYMENTS_DB_PATH": str(Path(self.tmp.name) / "rotation.db")})
+        self.env.start()
+        self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=appmod.app), base_url="https://test")
+
+    async def asyncTearDown(self):
+        await self.client.aclose()
+        self.env.stop()
+        self.tmp.cleanup()
+
+    async def test_actual_module_quotes_rotate_stale_environments_and_preserve_custom_merchants(self):
+        new_base = "0x80E0Ae84679b7f11bE171DaADd492FBECf628cd6"
+        new_sol = "9wuMysgXwNhtQeqJgGByAiMYc4EjzZ5wUSmnjrrt3ffh"
+        scenarios = [({}, new_base, new_sol),
+                     ({"PAYOUT_WALLET_ADDRESS": " " + appmod.RETIRED_WALLET_ADDRESS + " ", "SOLANA_MERCHANT_ADDRESS": " " + appmod.RETIRED_SOLANA_WALLET_ADDRESS + " "}, new_base, new_sol),
+                     ({"WALLET_ADDRESS": appmod.RETIRED_WALLET_ADDRESS.lower()}, new_base, new_sol),
+                     ({"PAYOUT_WALLET_ADDRESS": PAYER, "SOLANA_MERCHANT_ADDRESS": appmod.SOLANA_FEE_PAYER}, PAYER, appmod.SOLANA_FEE_PAYER)]
+        for environment, expected_base, expected_sol in scenarios:
+            with self.subTest(environment_names=list(environment)):
+                # No application credentials are inherited or read by this load.
+                with patch.dict(os.environ, environment, clear=True):
+                    loaded = runpy.run_path(str(Path(appmod.__file__)), run_name="merchant_rotation_fixture")
+                for cached in loaded["CHALLENGE_CACHE"].values():
+                    self.assertEqual([q["payTo"] for q in cached["body"]["accepts"]], [expected_base, expected_sol])
+                self.assertEqual(loaded["SOLANA_USDC_ATA"], "DD3A7jaXFeHcif9eYj6Vhomuxypat5Yxi8ow6wxz27yL")
+
+    async def test_public_payment_instructions_have_only_current_operating_recipients(self):
+        root = Path(appmod.__file__).parent
+        for name in ("index.html", "llms.txt", "llms-full.txt"):
+            text = (root / "public" / name).read_text(encoding="utf-8")
+            self.assertIn("0x80E0Ae84679b7f11bE171DaADd492FBECf628cd6", text)
+            self.assertIn("9wuMysgXwNhtQeqJgGByAiMYc4EjzZ5wUSmnjrrt3ffh", text)
+            self.assertNotIn(appmod.RETIRED_WALLET_ADDRESS.lower(), text.lower())
+            self.assertNotIn(appmod.RETIRED_SOLANA_WALLET_ADDRESS, text)
+            self.assertNotIn("3shUSbf9mkGabKqa2pdV7ZrstYvHozwusurLLuugf4dc", text)
+
+    async def test_retired_payments_only_read_state_and_never_claim_reclaim_or_settle(self):
+        for network in (appmod.NETWORK, appmod.SOLANA_NETWORK):
+            for state in (None, "preparing", "settling", "settlement_unknown"):
+                with self.subTest(network=network, state=state):
+                    raw = retired_authorization(network, nonce=500)
+                    identity, _ = appmod.payment_identity(raw, "arbitrage_scan", retired_merchant=True)
+                    with journal.connect() as conn:
+                        conn.execute("DELETE FROM paid_fulfillments")
+                        if state:
+                            conn.execute("INSERT INTO paid_fulfillments VALUES(?,?,?,?,?,?,?,?)", (identity, journal.digest({"tool": "arbitrage_scan", "arguments": {}}), "arbitrage_scan", state, None, None, 1, "paused-old-worker"))
+                        before = conn.execute("SELECT * FROM paid_fulfillments").fetchall()
+                    with patch.object(appmod, "verify_payment_authorization", AsyncMock()) as verify, patch.object(appmod, "execute_tool", AsyncMock()) as execute, patch.object(appmod, "try_settle_payment") as settle:
+                        result = await self.client.post("/toll/arbitrage_scan", json={}, headers={"PAYMENT-SIGNATURE": raw})
+                    self.assertEqual(result.status_code, 409 if state in ("settling", "settlement_unknown") else 402)
+                    verify.assert_not_awaited()
+                    execute.assert_not_awaited()
+                    settle.assert_not_called()
+                    with journal.connect() as conn:
+                        self.assertEqual(conn.execute("SELECT * FROM paid_fulfillments").fetchall(), before)
+
+    async def test_completed_legacy_delivery_requires_same_buyer_and_arguments(self):
+        for network in (appmod.NETWORK, appmod.SOLANA_NETWORK):
+            with self.subTest(network=network):
+                raw = retired_authorization(network, nonce=501)
+                identity, _ = appmod.payment_identity(raw, "arbitrage_scan", retired_merchant=True)
+                owner = journal.claim(identity, "arbitrage_scan", {})["owner"]
+                result = {"status": "quoted", "retained": "original paid private result"}
+                receipt = {"success": True, "transaction": "historical-confirmed-transaction", "network": network}
+                journal.prepare(identity, result, owner)
+                journal.finish(identity, "delivered", receipt, owner=owner)
+                with patch.object(appmod, "verify_payment_authorization", AsyncMock()) as verify, patch.object(appmod, "execute_tool", AsyncMock()) as execute, patch.object(appmod, "try_settle_payment") as settle:
+                    recovered = await self.client.post("/toll/arbitrage_scan", json={}, headers={"PAYMENT-SIGNATURE": raw})
+                    conflict = await self.client.post("/toll/arbitrage_scan", json={"amount": "2"}, headers={"PAYMENT-SIGNATURE": raw})
+                    body = json.loads(raw if raw.startswith("{") else base64.b64decode(raw))
+                    if network == appmod.NETWORK:
+                        body["payload"]["signature"] = "0x" + "00" * 65
+                    else:
+                        wire = bytearray(base64.b64decode(body["payload"]["transaction"]))
+                        wire[65] ^= 1
+                        body["payload"]["transaction"] = base64.b64encode(wire).decode()
+                    unauthorized = await self.client.post("/toll/arbitrage_scan", json={}, headers={"PAYMENT-SIGNATURE": json.dumps(body)})
+                self.assertEqual(recovered.status_code, 200)
+                self.assertEqual(recovered.json(), result)
+                self.assertEqual(json.loads(base64.b64decode(recovered.headers["payment-response"])), receipt)
+                self.assertEqual(conflict.status_code, 409)
+                self.assertEqual(unauthorized.status_code, 400)
+                self.assertNotIn(result["retained"], unauthorized.text)
+                verify.assert_not_awaited()
+                execute.assert_not_awaited()
+                settle.assert_not_called()
 
 
 class RouteTests(unittest.IsolatedAsyncioTestCase):
@@ -282,8 +388,8 @@ class RecoveryProofTests(unittest.TestCase):
         self.environment.stop()
         self.temp.cleanup()
 
-    def retain(self, raw):
-        identity, _ = appmod.payment_identity(raw, "arbitrage_scan")
+    def retain(self, raw, *, retired_merchant=False):
+        identity, _ = appmod.payment_identity(raw, "arbitrage_scan", retired_merchant=retired_merchant)
         owner = journal.claim(identity, "arbitrage_scan", {})["owner"]
         journal.prepare(identity, {"status": "quoted", "retained": "actual requested result"}, owner)
         journal.finish(identity, "settlement_unknown", owner=owner)
@@ -295,7 +401,7 @@ class RecoveryProofTests(unittest.TestCase):
         block_hash = "0x" + "cc" * 32
         transaction = "0x" + "ab" * 32
         logs = [
-            {"address": appmod.ASSET, "topics": ["0x" + keccak(text="Transfer(address,address,uint256)").hex(), topic(PAYER), topic(appmod.WALLET_ADDRESS)], "data": hex(2000)},
+            {"address": appmod.ASSET, "topics": ["0x" + keccak(text="Transfer(address,address,uint256)").hex(), topic(PAYER), topic(auth["to"])], "data": hex(2000)},
             {"address": appmod.ASSET, "topics": ["0x" + keccak(text="AuthorizationUsed(address,bytes32)").hex(), topic(PAYER), "0x" + "00" * 32 if wrong_nonce else auth["nonce"]], "data": "0x"},
         ]
         def rpc(method, params):
@@ -327,6 +433,43 @@ class RecoveryProofTests(unittest.TestCase):
         with self.assertRaises(recovery.ReconciliationError):
             recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
         self.assertEqual(journal.claim(identity, "arbitrage_scan", {})["state"], "settlement_unknown")
+
+    def test_retired_base_purchase_reconciles_only_exact_retained_chain_proof(self):
+        raw = retired_authorization(appmod.NETWORK, nonce=997)
+        identity = self.retain(raw, retired_merchant=True)
+        transaction, bad_rpc = self.base_rpc(raw, wrong_nonce=True)
+        with self.assertRaises(recovery.ReconciliationError):
+            recovery.reconcile(raw, "arbitrage_scan", transaction, bad_rpc)
+        transaction, rpc = self.base_rpc(raw)
+        with patch.object(appmod, "try_settle_payment", side_effect=AssertionError("Retired recovery cannot settle")):
+            result = recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
+        self.assertEqual(result["new_settlements_submitted"], 0)
+        self.assertEqual(journal.lookup(identity, "arbitrage_scan", {})["state"], "delivered")
+
+    def test_retired_payment_without_retained_operation_never_queries_chain(self):
+        from unittest.mock import Mock
+        rpc = Mock(side_effect=AssertionError("No matching retained purchase"))
+        with self.assertRaises(recovery.ReconciliationError):
+            recovery.reconcile(retired_authorization(appmod.NETWORK, nonce=996), "arbitrage_scan", "0x" + "ab" * 32, rpc)
+        rpc.assert_not_called()
+
+    def test_retired_solana_purchase_reconciles_exact_message_and_old_merchant_delta(self):
+        raw = retired_authorization(appmod.SOLANA_NETWORK)
+        identity = self.retain(raw, retired_merchant=True)
+        body = appmod.canonical_payment(raw, "arbitrage_scan", retired_merchant=True)
+        wire = base64.b64decode(body["paymentPayload"]["payload"]["transaction"])
+        transaction = appmod._encode_base58(bytes.fromhex("03" * 64))
+        actual = wire[:1] + bytes.fromhex("03" * 64) + wire[65:]
+        payer = appmod._canonical_payer(body)
+        def entry(owner, amount):
+            return {"owner": owner, "mint": appmod.SOLANA_USDC_MINT, "uiTokenAmount": {"decimals": 6, "amount": str(amount)}}
+        result = {"slot": 1234, "transaction": [base64.b64encode(actual).decode(), "base64"], "meta": {"err": None, "preTokenBalances": [entry(payer, 3000), entry(appmod.RETIRED_SOLANA_WALLET_ADDRESS, 0)], "postTokenBalances": [entry(payer, 1000), entry(appmod.RETIRED_SOLANA_WALLET_ADDRESS, 2000)]}}
+        def rpc(method, params):
+            return "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" if method == "getGenesisHash" else result
+        with patch.object(appmod, "try_settle_payment", side_effect=AssertionError("Retired recovery cannot settle")):
+            recovered = recovery.reconcile(raw, "arbitrage_scan", transaction, rpc)
+        self.assertEqual(recovered["new_settlements_submitted"], 0)
+        self.assertEqual(journal.lookup(identity, "arbitrage_scan", {})["state"], "delivered")
 
     def test_solana_recovery_requires_exact_signed_message_and_usdc_debit_credit(self):
         # Fully synthetic RPC fixture; no Solana transfer is submitted.
@@ -438,6 +581,10 @@ class ModelCostTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SettlementBoundaryTests(unittest.TestCase):
+    def test_zero_base_transaction_hash_cannot_acknowledge_a_payment(self):
+        with self.assertRaises(ValueError):
+            appmod.validate_paid_receipt({"success": True, "transaction": "0x" + "00" * 32, "payer": PAYER, "network": appmod.NETWORK}, authorization(), "arbitrage_scan")
+
     def test_cdp_timeout_and_server_error_never_submit_to_second_settler(self):
         for failure in (httpx.ReadTimeout("fixture"), httpx.Response(500, json={"error": "post-broadcast failure"}), httpx.Response(200, json={"success": "true"})):
             reply = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}

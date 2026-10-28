@@ -47,6 +47,18 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
+def lookup(authorization_id, tool, args):
+    """Authenticate retained delivery terms without claiming or reclaiming work."""
+    bound = digest({"tool": tool, "arguments": args})
+    with connect() as conn:
+        found = conn.execute("SELECT request_hash,state,response_json,receipt_json FROM paid_fulfillments WHERE authorization_id=?", (authorization_id,)).fetchone()
+    if not found:
+        return {"state": "missing"}
+    if found[0] != bound:
+        return {"state": "conflict"}
+    return {"state": found[1], "response": json.loads(found[2]) if found[2] else None, "receipt": json.loads(found[3]) if found[3] else None}
+
+
 def claim(authorization_id, tool, args):
     bound = digest({"tool": tool, "arguments": args})
     owner, now = secrets.token_hex(16), time.time()

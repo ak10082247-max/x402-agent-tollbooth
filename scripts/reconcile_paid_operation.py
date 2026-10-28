@@ -96,15 +96,28 @@ def prove_solana(rpc, body, transaction):
     return {"chain": "solana", "slot": response["slot"], "commitment": "finalized", "message_matches_signed_purchase": True}
 
 
+def payment_terms(raw_header, tool):
+    """Authenticate current or fixed retired terms; this tool never settles."""
+    try:
+        identity, network = service.payment_identity(raw_header, tool)
+        return identity, network, False
+    except service.QuoteError as current_error:
+        try:
+            identity, network = service.payment_identity(raw_header, tool, retired_merchant=True)
+            return identity, network, True
+        except service.QuoteError:
+            raise current_error
+
+
 def reconcile(raw_header, tool, transaction, rpc):
-    identity, network = service.payment_identity(raw_header, tool)
-    body = service.canonical_payment(raw_header, tool)
+    identity, network, retired_merchant = payment_terms(raw_header, tool)
     # Inspect the retained operation before consuming RPC resources or mutating it.
     with connect() as connection:
         row = connection.execute("SELECT tool,state,response_json FROM paid_fulfillments WHERE authorization_id=?", (identity,)).fetchone()
     require(row and row[0] == tool and row[1] in ("settling", "settlement_unknown") and row[2], "No matching retained operation awaits reconciliation")
+    body = service.canonical_payment(raw_header, tool, retired_merchant=retired_merchant)
     proof = (prove_base if network == service.NETWORK else prove_solana)(rpc, body, transaction)
-    receipt = service.validate_paid_receipt({"success": True, "transaction": transaction, "payer": service._canonical_payer(body), "network": network}, raw_header, tool)
+    receipt = service.validate_paid_receipt({"success": True, "transaction": transaction, "payer": service._canonical_payer(body), "network": network}, raw_header, tool, retired_merchant=retired_merchant)
     prepared = json.loads(row[2])
     if isinstance(prepared.get("method"), str):
         receipt["fulfillment_method"] = prepared["method"]
@@ -121,7 +134,7 @@ def main():
     args = parser.parse_args()
     require(args.payment_file.stat().st_size <= 65536, "Payment header file is too large")
     raw = args.payment_file.read_text(encoding="utf-8").strip()
-    _, network = service.payment_identity(raw, args.tool)
+    _, network, _ = payment_terms(raw, args.tool)
     rpc_url = os.environ.get("BASE_RPC_URL", "https://mainnet.base.org") if network == service.NETWORK else os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
     with httpx.Client(timeout=15.0, follow_redirects=False) as client:
         def rpc(method, params):

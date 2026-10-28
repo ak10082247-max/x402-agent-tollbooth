@@ -18,8 +18,8 @@
 | Parameter | Base Mainnet (`eip155:8453`) | Solana Mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`) |
 | :--- | :--- | :--- |
 | **Asset / Mint** | USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) | USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) |
-| **Merchant Wallet** | `0x73279fa4BadA7CAC888c62CDa4f5c8104765f6f1` | `3tQ4GthjUMqNsyrb1rZMocMHoNewFQWjDUvHZqWeYuCN` |
-| **Merchant ATA** | N/A | `3shUSbf9mkGabKqa2pdV7ZrstYvHozwusurLLuugf4dc` |
+| **Merchant Wallet** | `0x80E0Ae84679b7f11bE171DaADd492FBECf628cd6` | `9wuMysgXwNhtQeqJgGByAiMYc4EjzZ5wUSmnjrrt3ffh` |
+| **Merchant ATA** | N/A | `DD3A7jaXFeHcif9eYj6Vhomuxypat5Yxi8ow6wxz27yL` |
 | **Facilitators** | Coinbase CDP & PayAI Facilitator | PayAI Facilitator (`https://facilitator.payai.network`) |
 | **Gas Sponsorship** | 100% Gasless (Relayer pays L2 gas) | 100% Gasless (FeePayer `CjNFTjvBhbJJd2B5ePPMHRLx1ELZpa8dwQgGL727eKww`) |
 
